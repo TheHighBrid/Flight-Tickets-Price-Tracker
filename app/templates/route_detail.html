@@ -1,0 +1,289 @@
+{% extends 'base.html' %}
+{% block title %}{{ route.origin }} → {{ route.destination }} – FlightTracker{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+  <a href="{{ url_for('main.index') }}" class="text-decoration-none text-muted small">
+    <i class="bi bi-arrow-left me-1"></i>Back to Dashboard
+  </a>
+</div>
+
+<!-- Route Header -->
+<div class="route-detail-header rounded-4 p-4 mb-4 text-white">
+  <div class="row align-items-center">
+    <div class="col-md-8">
+      <div class="d-flex align-items-center gap-3 mb-2">
+        <div class="route-header-code">{{ route.origin }}</div>
+        <div class="route-arrow">
+          <i class="bi bi-airplane-fill fs-4"></i>
+          {% if route.return_date %}<i class="bi bi-arrow-left-right ms-1"></i>{% endif %}
+        </div>
+        <div class="route-header-code">{{ route.destination }}</div>
+      </div>
+      <div class="opacity-75">
+        {{ route.origin_city or route.origin }} → {{ route.destination_city or route.destination }}
+      </div>
+      <div class="mt-2 small opacity-75">
+        <i class="bi bi-calendar3 me-1"></i>
+        {{ route.departure_date.strftime('%B %d, %Y') }}
+        {% if route.return_date %}
+          – {{ route.return_date.strftime('%B %d, %Y') }}
+          <span class="badge bg-white text-dark ms-1">Round Trip</span>
+        {% else %}
+          <span class="badge bg-white text-dark ms-1">One Way</span>
+        {% endif %}
+        &bull;
+        <i class="bi bi-person ms-2 me-1"></i>{{ route.adults }} adult{{ 's' if route.adults > 1 }}
+      </div>
+    </div>
+    <div class="col-md-4 text-md-end mt-3 mt-md-0">
+      {% if route.latest_price %}
+      <div class="current-price-hero">${{ "%.2f"|format(route.latest_price) }}
+        <span class="fs-6 opacity-75">{{ route.currency }}</span>
+      </div>
+      {% if route.price_change is not none %}
+        {% if route.price_change < 0 %}
+          <div class="badge bg-success fs-6 mt-1">
+            <i class="bi bi-arrow-down-short"></i>
+            ${{ "%.2f"|format(route.price_change|abs) }} lower than last check
+          </div>
+        {% elif route.price_change > 0 %}
+          <div class="badge bg-danger fs-6 mt-1">
+            <i class="bi bi-arrow-up-short"></i>
+            ${{ "%.2f"|format(route.price_change) }} higher than last check
+          </div>
+        {% else %}
+          <div class="badge bg-secondary fs-6 mt-1">No change from last check</div>
+        {% endif %}
+      {% endif %}
+      {% else %}
+      <div class="text-white opacity-75 fst-italic">No price data yet</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Info Row -->
+<div class="row g-3 mb-4">
+  {% if route.target_price %}
+  <div class="col-sm-4">
+    <div class="info-card rounded-3 p-3 text-center {% if route.is_below_target %}border-success{% endif %}">
+      <div class="text-muted small mb-1"><i class="bi bi-bullseye me-1"></i>Target Price</div>
+      <div class="fw-bold fs-5 {% if route.is_below_target %}text-success{% endif %}">
+        ${{ "%.2f"|format(route.target_price) }}
+        {% if route.is_below_target %}
+          <i class="bi bi-check-circle-fill text-success ms-1"></i>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  <div class="col-sm-{% if route.target_price %}4{% else %}6{% endif %}">
+    <div class="info-card rounded-3 p-3 text-center">
+      <div class="text-muted small mb-1"><i class="bi bi-graph-up me-1"></i>Price Checks</div>
+      <div class="fw-bold fs-5">{{ route.price_history|length }}</div>
+    </div>
+  </div>
+  <div class="col-sm-{% if route.target_price %}4{% else %}6{% endif %}">
+    <div class="info-card rounded-3 p-3 text-center">
+      <div class="text-muted small mb-1"><i class="bi bi-clock me-1"></i>Last Checked</div>
+      <div class="fw-bold fs-6">
+        {% if route.last_checked %}
+          {{ route.last_checked.strftime('%b %d, %H:%M') }}
+        {% else %}
+          Never
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Actions -->
+<div class="d-flex gap-2 mb-4 flex-wrap">
+  <button class="btn btn-primary" id="checkNowBtn" data-route-id="{{ route.id }}">
+    <i class="bi bi-arrow-clockwise me-1"></i>Check Now
+  </button>
+  <button class="btn btn-outline-{{ 'warning' if route.active else 'success' }}" id="toggleBtn"
+    data-route-id="{{ route.id }}">
+    <i class="bi bi-{{ 'pause-fill' if route.active else 'play-fill' }} me-1"></i>
+    {{ 'Pause' if route.active else 'Resume' }} Tracking
+  </button>
+  <form method="POST" action="{{ url_for('main.delete_route', route_id=route.id) }}"
+    onsubmit="return confirm('Remove this route and all its price history?');"
+    class="ms-auto">
+    <button type="submit" class="btn btn-outline-danger">
+      <i class="bi bi-trash me-1"></i>Remove Route
+    </button>
+  </form>
+</div>
+
+{% if route.price_history|length > 1 %}
+<!-- Price History Chart -->
+<div class="card shadow-sm mb-4">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <h5 class="mb-0"><i class="bi bi-graph-up me-2"></i>Price History</h5>
+    <span class="text-muted small">{{ route.price_history|length }} data points</span>
+  </div>
+  <div class="card-body">
+    <canvas id="priceChart" style="max-height:300px;"></canvas>
+  </div>
+</div>
+{% endif %}
+
+<!-- History Table -->
+{% if route.price_history %}
+<div class="card shadow-sm">
+  <div class="card-header">
+    <h5 class="mb-0"><i class="bi bi-table me-2"></i>All Price Records</h5>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Checked At</th>
+          <th>Price</th>
+          <th>Airline</th>
+          <th>Duration</th>
+          <th>Stops</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for record in route.price_history|reverse %}
+        <tr {% if loop.first %}class="table-primary fw-semibold"{% endif %}>
+          <td>{{ record.checked_at.strftime('%b %d, %Y %H:%M') }}</td>
+          <td>
+            ${{ "%.2f"|format(record.price) }} {{ record.currency }}
+            {% if loop.first %}<span class="badge bg-primary ms-1">Latest</span>{% endif %}
+          </td>
+          <td>{{ record.airline_name or record.airline or '—' }}</td>
+          <td>
+            {% if record.duration %}
+              {% set dur = record.duration %}
+              {% if 'PT' in dur %}
+                {% set dur = dur.replace('PT','').replace('H',' hr ').replace('M',' min') %}
+              {% endif %}
+              {{ dur }}
+            {% else %}—{% endif %}
+          </td>
+          <td>
+            {% if record.stops == 0 %}
+              <span class="badge bg-success-subtle text-success">Nonstop</span>
+            {% else %}
+              <span class="badge bg-warning-subtle text-warning">{{ record.stops }} stop{{ 's' if record.stops > 1 }}</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="text-center py-4 text-muted">
+  <i class="bi bi-database display-4"></i>
+  <p class="mt-2">No price history yet. Click "Check Now" to fetch the first price.</p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+{% if route.price_history|length > 1 %}
+(function () {
+  const history = {{ history_json | tojson }};
+  const labels = history.map(h => new Date(h.checked_at).toLocaleDateString('en-US', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}));
+  const prices = history.map(h => h.price);
+  const targetPrice = {{ route.target_price or 'null' }};
+
+  const ctx = document.getElementById('priceChart').getContext('2d');
+  const datasets = [{
+    label: 'Price ($)',
+    data: prices,
+    borderColor: '#0077cc',
+    backgroundColor: 'rgba(0, 119, 204, 0.08)',
+    borderWidth: 2.5,
+    pointRadius: 4,
+    pointHoverRadius: 6,
+    tension: 0.4,
+    fill: true,
+  }];
+
+  if (targetPrice) {
+    datasets.push({
+      label: 'Target Price',
+      data: labels.map(() => targetPrice),
+      borderColor: 'rgba(220,53,69,0.7)',
+      borderDash: [6, 3],
+      borderWidth: 1.5,
+      pointRadius: 0,
+      fill: false,
+    });
+  }
+
+  new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: targetPrice != null },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` $${ctx.parsed.y.toFixed(2)}`
+          }
+        }
+      },
+      scales: {
+        y: {
+          ticks: { callback: v => `$${v}` },
+          grid: { color: 'rgba(0,0,0,0.05)' }
+        },
+        x: {
+          grid: { display: false }
+        }
+      }
+    }
+  });
+})();
+{% endif %}
+
+// Check now
+document.getElementById('checkNowBtn').addEventListener('click', async function () {
+  const id = this.dataset.routeId;
+  this.disabled = true;
+  this.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Checking…';
+  try {
+    const res = await fetch(`/routes/${id}/check`, { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      showToast(`Price updated: $${data.price.toFixed(2)} ${data.currency}`, 'success');
+      setTimeout(() => location.reload(), 1200);
+    } else {
+      showToast(data.error || 'Check failed', 'danger');
+      this.disabled = false;
+      this.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Check Now';
+    }
+  } catch (e) {
+    showToast('Network error', 'danger');
+    this.disabled = false;
+    this.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Check Now';
+  }
+});
+
+// Toggle active
+document.getElementById('toggleBtn').addEventListener('click', async function () {
+  const id = this.dataset.routeId;
+  try {
+    const res = await fetch(`/routes/${id}/toggle`, { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      showToast(`Route ${data.status}`, 'info');
+      setTimeout(() => location.reload(), 800);
+    }
+  } catch (e) {
+    showToast('Network error', 'danger');
+  }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,230 @@
+/* ============================================================
+   FlightTracker – Custom Styles
+   ============================================================ */
+
+:root {
+  --brand-blue: #0077cc;
+  --brand-dark: #1a1a2e;
+  --brand-teal: #00c9a7;
+  --card-radius: 12px;
+}
+
+body {
+  background-color: #f4f7fc;
+  color: #212529;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+/* ─── Navbar ───────────────────────────────────────────────── */
+.navbar {
+  background: linear-gradient(135deg, var(--brand-dark) 0%, #0d2a55 100%);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+  padding: 0.75rem 0;
+}
+
+.navbar-brand {
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: #fff !important;
+}
+
+.navbar-brand i { color: var(--brand-teal); }
+
+.navbar .nav-link {
+  color: rgba(255,255,255,0.8) !important;
+  font-size: 0.9rem;
+  transition: color 0.2s;
+}
+.navbar .nav-link:hover { color: #fff !important; }
+
+/* ─── Hero Banner ───────────────────────────────────────────── */
+.hero-banner {
+  background: linear-gradient(135deg, var(--brand-dark) 0%, var(--brand-blue) 100%);
+  position: relative;
+  overflow: hidden;
+}
+.hero-banner::before {
+  content: '✈';
+  position: absolute;
+  right: 30px;
+  top: 50%;
+  transform: translateY(-50%) rotate(45deg);
+  font-size: 8rem;
+  opacity: 0.05;
+}
+
+/* ─── Stat Cards ────────────────────────────────────────────── */
+.stat-card {
+  background: #fff;
+  border: 1px solid #e9ecef;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+
+.stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--brand-dark);
+}
+.stat-label {
+  font-size: 0.8rem;
+  color: #6c757d;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 4px;
+}
+
+/* ─── Route Cards ───────────────────────────────────────────── */
+.route-card {
+  border: 1px solid #e9ecef;
+  border-radius: var(--card-radius) !important;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.route-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12) !important;
+}
+
+.airport-code {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--brand-dark);
+  letter-spacing: -0.5px;
+}
+
+.current-price {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--brand-dark);
+}
+
+.currency-label {
+  font-size: 0.85rem;
+  color: #6c757d;
+  font-weight: 600;
+}
+
+.price-badge { font-size: 0.75rem; }
+
+.route-dates { font-size: 0.875rem; color: #495057; }
+
+.sparkline-container { border-radius: 6px; overflow: hidden; }
+
+.opacity-60 { opacity: 0.6; }
+
+/* ─── Add Route Form ────────────────────────────────────────── */
+.card-header-branded {
+  background: linear-gradient(135deg, var(--brand-dark) 0%, var(--brand-blue) 100%);
+  border-bottom: none;
+}
+
+.suggestions-dropdown {
+  position: absolute;
+  z-index: 1000;
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  max-height: 200px;
+  overflow-y: auto;
+  width: 100%;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.suggestion-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.1s;
+}
+.suggestion-item:hover { background: #f0f4f8; }
+
+.col-6 { position: relative; }
+
+/* ─── Route Detail ──────────────────────────────────────────── */
+.route-detail-header {
+  background: linear-gradient(135deg, var(--brand-dark) 0%, #005fa3 100%);
+}
+
+.route-header-code {
+  font-size: 2.5rem;
+  font-weight: 800;
+  letter-spacing: -1px;
+  line-height: 1;
+}
+
+.route-arrow { color: rgba(255,255,255,0.7); }
+
+.current-price-hero {
+  font-size: 2.8rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.info-card {
+  background: #fff;
+  border: 1px solid #e9ecef;
+}
+
+/* ─── Footer ────────────────────────────────────────────────── */
+.footer {
+  border-top: 1px solid #e9ecef;
+  background: #fff;
+  margin-top: 4rem;
+}
+
+/* ─── Toast container ───────────────────────────────────────── */
+#toast-container {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.ft-toast {
+  min-width: 280px;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  padding: 12px 16px;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: slideIn 0.25s ease;
+  border-left: 4px solid var(--brand-blue);
+}
+.ft-toast.success { border-color: #28a745; }
+.ft-toast.danger  { border-color: #dc3545; }
+.ft-toast.info    { border-color: var(--brand-blue); }
+
+@keyframes slideIn {
+  from { transform: translateX(120%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+/* ─── Spinner animation ─────────────────────────────────────── */
+.spinning {
+  animation: spin 0.6s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ─── Misc ──────────────────────────────────────────────────── */
+.empty-state { opacity: 0.7; }
+
+.table th { font-weight: 600; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.4px; }
+
+@media (max-width: 576px) {
+  .airport-code { font-size: 1.2rem; }
+  .current-price { font-size: 1.5rem; }
+  .route-header-code { font-size: 1.8rem; }
+  .current-price-hero { font-size: 2rem; }
+}

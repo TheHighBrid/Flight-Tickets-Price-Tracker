@@ -1,0 +1,177 @@
+{% extends 'base.html' %}
+{% block title %}Track a Route – FlightTracker{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-8 col-lg-6">
+    <div class="mb-4">
+      <a href="{{ url_for('main.index') }}" class="text-decoration-none text-muted small">
+        <i class="bi bi-arrow-left me-1"></i>Back to Dashboard
+      </a>
+    </div>
+
+    <div class="card shadow-sm">
+      <div class="card-header card-header-branded py-3">
+        <h4 class="mb-0 fw-semibold text-white">
+          <i class="bi bi-airplane me-2"></i>Track a Flight Route
+        </h4>
+        <p class="mb-0 mt-1 text-white opacity-75 small">
+          Enter airport codes (e.g. JFK, LAX, LHR) and we'll monitor prices automatically.
+        </p>
+      </div>
+      <div class="card-body p-4">
+        <form method="POST" action="{{ url_for('main.add_route') }}" id="addRouteForm">
+
+          <!-- Origin / Destination -->
+          <div class="row g-3 mb-3">
+            <div class="col-6">
+              <label class="form-label fw-semibold">Origin <span class="text-danger">*</span></label>
+              <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-geo-alt"></i></span>
+                <input type="text" class="form-control airport-input text-uppercase" name="origin"
+                  placeholder="JFK" maxlength="3" required autocomplete="off"
+                  data-suggestions-id="origin-suggestions">
+              </div>
+              <div class="suggestions-dropdown" id="origin-suggestions"></div>
+              <div class="form-text small text-muted">3-letter IATA code</div>
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold">Destination <span class="text-danger">*</span></label>
+              <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-geo"></i></span>
+                <input type="text" class="form-control airport-input text-uppercase" name="destination"
+                  placeholder="LAX" maxlength="3" required autocomplete="off"
+                  data-suggestions-id="destination-suggestions">
+              </div>
+              <div class="suggestions-dropdown" id="destination-suggestions"></div>
+            </div>
+          </div>
+
+          <!-- Dates -->
+          <div class="row g-3 mb-3">
+            <div class="col-6">
+              <label class="form-label fw-semibold">Departure Date <span class="text-danger">*</span></label>
+              <input type="date" class="form-control" name="departure_date" required
+                min="{{ now.strftime('%Y-%m-%d') }}">
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold">Return Date
+                <span class="text-muted fw-normal">(optional)</span>
+              </label>
+              <input type="date" class="form-control" name="return_date">
+            </div>
+          </div>
+
+          <!-- Passengers / Currency -->
+          <div class="row g-3 mb-3">
+            <div class="col-6">
+              <label class="form-label fw-semibold">Passengers</label>
+              <select class="form-select" name="adults">
+                {% for i in range(1, 7) %}
+                <option value="{{ i }}" {% if i == 1 %}selected{% endif %}>
+                  {{ i }} {{ 'Adult' if i == 1 else 'Adults' }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold">Currency</label>
+              <select class="form-select" name="currency">
+                <option value="USD" selected>USD – US Dollar</option>
+                <option value="EUR">EUR – Euro</option>
+                <option value="GBP">GBP – British Pound</option>
+                <option value="CAD">CAD – Canadian Dollar</option>
+                <option value="AUD">AUD – Australian Dollar</option>
+                <option value="JPY">JPY – Japanese Yen</option>
+              </select>
+            </div>
+          </div>
+
+          <hr class="my-3">
+
+          <!-- Price Alert -->
+          <div class="mb-3">
+            <label class="form-label fw-semibold">
+              <i class="bi bi-bell me-1 text-warning"></i>Target Price Alert
+              <span class="text-muted fw-normal">(optional)</span>
+            </label>
+            <div class="input-group">
+              <span class="input-group-text">$</span>
+              <input type="number" class="form-control" name="target_price"
+                placeholder="e.g. 350" min="1" step="0.01">
+            </div>
+            <div class="form-text">Get alerted when the price drops below this amount.</div>
+          </div>
+
+          <div class="mb-4">
+            <label class="form-label fw-semibold">
+              <i class="bi bi-envelope me-1 text-warning"></i>Alert Email
+              <span class="text-muted fw-normal">(optional)</span>
+            </label>
+            <input type="email" class="form-control" name="alert_email"
+              placeholder="you@example.com">
+          </div>
+
+          <div class="d-grid">
+            <button type="submit" class="btn btn-primary btn-lg fw-semibold" id="submitBtn">
+              <i class="bi bi-plus-circle me-2"></i>Start Tracking
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const today = new Date().toISOString().split('T')[0];
+document.querySelector('[name="departure_date"]').min = today;
+
+// Airport autocomplete
+document.querySelectorAll('.airport-input').forEach(input => {
+  const suggestionsId = input.dataset.suggestionsId;
+  const suggestionsEl = document.getElementById(suggestionsId);
+
+  input.addEventListener('input', async function () {
+    const q = this.value.trim();
+    if (q.length < 1) { suggestionsEl.innerHTML = ''; return; }
+
+    try {
+      const res = await fetch(`/api/airports?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      suggestionsEl.innerHTML = data.map(a =>
+        `<div class="suggestion-item" data-code="${a.code}">${a.code} – ${a.city}</div>`
+      ).join('');
+
+      suggestionsEl.querySelectorAll('.suggestion-item').forEach(item => {
+        item.addEventListener('click', () => {
+          input.value = item.dataset.code;
+          suggestionsEl.innerHTML = '';
+        });
+      });
+    } catch (e) {}
+  });
+
+  document.addEventListener('click', e => {
+    if (!input.contains(e.target)) suggestionsEl.innerHTML = '';
+  });
+});
+
+// Return date constraint
+const depInput = document.querySelector('[name="departure_date"]');
+const retInput = document.querySelector('[name="return_date"]');
+depInput.addEventListener('change', () => {
+  retInput.min = depInput.value;
+  if (retInput.value && retInput.value <= depInput.value) retInput.value = '';
+});
+
+// Submit spinner
+document.getElementById('addRouteForm').addEventListener('submit', function () {
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Fetching initial price…';
+});
+</script>
+{% endblock %}

@@ -1,0 +1,264 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard – FlightTracker{% endblock %}
+
+{% block content %}
+<!-- Hero -->
+<div class="hero-banner rounded-4 mb-4 p-4 p-md-5 text-white">
+  <div class="row align-items-center">
+    <div class="col-md-8">
+      <h1 class="display-6 fw-bold mb-1">
+        <i class="bi bi-airplane-fill me-2"></i>Flight Price Dashboard
+      </h1>
+      <p class="mb-0 opacity-75">Automatically monitors prices and alerts you when they drop.</p>
+    </div>
+    <div class="col-md-4 text-md-end mt-3 mt-md-0">
+      <a href="{{ url_for('main.add_route') }}" class="btn btn-light btn-lg fw-semibold">
+        <i class="bi bi-plus-circle-fill me-2"></i>Track a Route
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- Stats -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="stat-card rounded-3 p-3 text-center">
+      <div class="stat-value">{{ stats.total }}</div>
+      <div class="stat-label">Total Routes</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card rounded-3 p-3 text-center">
+      <div class="stat-value text-success">{{ stats.active }}</div>
+      <div class="stat-label">Active</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card rounded-3 p-3 text-center">
+      <div class="stat-value text-warning">{{ stats.alerts_set }}</div>
+      <div class="stat-label">Alerts Set</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card rounded-3 p-3 text-center">
+      <div class="stat-value text-primary">{{ stats.below_target }}</div>
+      <div class="stat-label">Below Target</div>
+    </div>
+  </div>
+</div>
+
+{% if routes %}
+<!-- Route Cards -->
+<div class="row g-3">
+  {% for route in routes %}
+  <div class="col-md-6 col-xl-4">
+    <div class="route-card card h-100 shadow-sm {% if not route.active %}opacity-60{% endif %}">
+      <div class="card-body">
+        <!-- Route Header -->
+        <div class="d-flex justify-content-between align-items-start mb-3">
+          <div>
+            <div class="route-code">
+              <span class="airport-code">{{ route.origin }}</span>
+              <i class="bi bi-arrow-right mx-2 text-muted"></i>
+              <span class="airport-code">{{ route.destination }}</span>
+            </div>
+            <div class="text-muted small mt-1">
+              {{ route.origin_city or route.origin }} → {{ route.destination_city or route.destination }}
+            </div>
+          </div>
+          <div class="d-flex gap-1 align-items-center">
+            {% if not route.active %}
+              <span class="badge bg-secondary">Paused</span>
+            {% elif route.is_below_target %}
+              <span class="badge bg-success">
+                <i class="bi bi-bell-fill me-1"></i>Below Target!
+              </span>
+            {% else %}
+              <span class="badge bg-primary-subtle text-primary">Active</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Dates -->
+        <div class="route-dates mb-3">
+          <i class="bi bi-calendar3 me-1 text-muted"></i>
+          <span>{{ route.departure_date.strftime('%b %d, %Y') }}</span>
+          {% if route.return_date %}
+            <span class="text-muted mx-1">–</span>
+            <span>{{ route.return_date.strftime('%b %d, %Y') }}</span>
+            <span class="badge bg-light text-secondary ms-1">Round Trip</span>
+          {% else %}
+            <span class="badge bg-light text-secondary ms-1">One Way</span>
+          {% endif %}
+        </div>
+
+        <!-- Price -->
+        {% if route.latest_price %}
+        <div class="price-row d-flex align-items-baseline gap-2 mb-1">
+          <span class="current-price">${{ "%.2f"|format(route.latest_price) }}</span>
+          <span class="currency-label">{{ route.currency }}</span>
+          {% if route.price_change is not none %}
+            {% if route.price_change < 0 %}
+              <span class="price-badge badge bg-success-subtle text-success">
+                <i class="bi bi-arrow-down-short"></i>{{ "%.2f"|format(route.price_change|abs) }}
+                {% if route.price_change_pct %}({{ "%.1f"|format(route.price_change_pct|abs) }}%){% endif %}
+              </span>
+            {% elif route.price_change > 0 %}
+              <span class="price-badge badge bg-danger-subtle text-danger">
+                <i class="bi bi-arrow-up-short"></i>{{ "%.2f"|format(route.price_change) }}
+                {% if route.price_change_pct %}({{ "%.1f"|format(route.price_change_pct|abs) }}%){% endif %}
+              </span>
+            {% else %}
+              <span class="price-badge badge bg-secondary-subtle text-secondary">No change</span>
+            {% endif %}
+          {% endif %}
+        </div>
+        {% if route.target_price %}
+        <div class="small text-muted mb-2">
+          <i class="bi bi-target me-1"></i>Target: ${{ "%.2f"|format(route.target_price) }}
+          {% if route.latest_price > route.target_price %}
+            <span class="text-danger">(${{"%.2f"|format(route.latest_price - route.target_price)}} above)</span>
+          {% else %}
+            <span class="text-success">(${{"%.2f"|format(route.target_price - route.latest_price)}} below!)</span>
+          {% endif %}
+        </div>
+        {% endif %}
+        {% else %}
+        <div class="text-muted fst-italic mb-3">No price data yet</div>
+        {% endif %}
+
+        <!-- Mini sparkline -->
+        {% if route.price_history|length > 1 %}
+        <div class="sparkline-container mb-3">
+          <canvas id="spark-{{ route.id }}" height="50"
+            data-prices="[{% for h in route.price_history %}{{ h.price }}{% if not loop.last %},{% endif %}{% endfor %}]">
+          </canvas>
+        </div>
+        {% endif %}
+
+        <!-- Footer row -->
+        <div class="d-flex justify-content-between align-items-center mt-auto pt-2 border-top">
+          <div class="text-muted small">
+            {% if route.last_checked %}
+              <i class="bi bi-clock me-1"></i>{{ route.last_checked.strftime('%b %d %H:%M') }}
+            {% else %}
+              <span class="text-muted fst-italic">Never checked</span>
+            {% endif %}
+          </div>
+          <div class="d-flex gap-1">
+            <button class="btn btn-sm btn-outline-secondary check-btn"
+              data-route-id="{{ route.id }}" title="Check now">
+              <i class="bi bi-arrow-clockwise"></i>
+            </button>
+            <a href="{{ url_for('main.route_detail', route_id=route.id) }}"
+               class="btn btn-sm btn-outline-primary" title="View details">
+              <i class="bi bi-bar-chart-line"></i>
+            </a>
+            <button class="btn btn-sm btn-outline-{{ 'warning' if route.active else 'success' }} toggle-btn"
+              data-route-id="{{ route.id }}"
+              title="{{ 'Pause tracking' if route.active else 'Resume tracking' }}">
+              <i class="bi bi-{{ 'pause-fill' if route.active else 'play-fill' }}"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% else %}
+<!-- Empty state -->
+<div class="empty-state text-center py-5">
+  <i class="bi bi-airplane display-1 text-muted"></i>
+  <h3 class="mt-3 fw-semibold text-muted">No routes tracked yet</h3>
+  <p class="text-muted">Add your first flight route to start monitoring prices.</p>
+  <a href="{{ url_for('main.add_route') }}" class="btn btn-primary btn-lg mt-2">
+    <i class="bi bi-plus-circle me-2"></i>Add Your First Route
+  </a>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  // Render sparklines
+  document.querySelectorAll('[id^="spark-"]').forEach(canvas => {
+    const prices = JSON.parse(canvas.dataset.prices || '[]');
+    if (prices.length < 2) return;
+    const min = Math.min(...prices);
+    const max = Math.max(...prices);
+    const lastColor = prices[prices.length-1] <= prices[prices.length-2]
+      ? 'rgba(25,135,84,0.8)' : 'rgba(220,53,69,0.8)';
+    new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels: prices.map((_, i) => i),
+        datasets: [{
+          data: prices,
+          borderColor: lastColor,
+          backgroundColor: lastColor.replace('0.8', '0.1'),
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.4,
+          fill: true,
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        scales: {
+          x: { display: false },
+          y: { display: false, min: min * 0.95, max: max * 1.05 }
+        },
+        animation: false,
+      }
+    });
+  });
+
+  // Check now button
+  document.querySelectorAll('.check-btn').forEach(btn => {
+    btn.addEventListener('click', async function () {
+      const id = this.dataset.routeId;
+      const icon = this.querySelector('i');
+      icon.classList.add('spinning');
+      this.disabled = true;
+
+      try {
+        const res = await fetch(`/routes/${id}/check`, { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          showToast(`Price updated: $${data.price.toFixed(2)} ${data.currency}`, 'success');
+          setTimeout(() => location.reload(), 1200);
+        } else {
+          showToast(data.error || 'Check failed', 'danger');
+        }
+      } catch (e) {
+        showToast('Network error', 'danger');
+      } finally {
+        icon.classList.remove('spinning');
+        this.disabled = false;
+      }
+    });
+  });
+
+  // Toggle active button
+  document.querySelectorAll('.toggle-btn').forEach(btn => {
+    btn.addEventListener('click', async function () {
+      const id = this.dataset.routeId;
+      try {
+        const res = await fetch(`/routes/${id}/toggle`, { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          showToast(`Route ${data.status}`, 'info');
+          setTimeout(() => location.reload(), 800);
+        }
+      } catch (e) {
+        showToast('Network error', 'danger');
+      }
+    });
+  });
+});
+</script>
+{% endblock %}
