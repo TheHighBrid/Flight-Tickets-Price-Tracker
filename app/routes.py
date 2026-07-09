@@ -205,6 +205,62 @@ def api_price_history(route_id):
     })
 
 
+@bp.route('/routes/<int:route_id>/edit', methods=['GET', 'POST'])
+def edit_route(route_id):
+    route = TrackedRoute.query.get_or_404(route_id)
+
+    if request.method == 'POST':
+        target_price_str = request.form.get('target_price', '').strip()
+        alert_email = request.form.get('alert_email', '').strip()
+
+        if target_price_str:
+            try:
+                target_price = float(target_price_str)
+                if target_price <= 0:
+                    raise ValueError
+                route.target_price = target_price
+            except ValueError:
+                flash('Target price must be a positive number.', 'danger')
+                return redirect(url_for('main.edit_route', route_id=route_id))
+        else:
+            route.target_price = None
+
+        route.alert_email = alert_email if alert_email else None
+        db.session.commit()
+        flash('Route updated.', 'success')
+        return redirect(url_for('main.route_detail', route_id=route_id))
+
+    return render_template('edit_route.html', route=route)
+
+
+@bp.route('/routes/<int:route_id>/export')
+def export_history(route_id):
+    import csv
+    import io
+    from flask import Response
+
+    route = TrackedRoute.query.get_or_404(route_id)
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Checked At', 'Price', 'Currency', 'Airline', 'Duration', 'Stops'])
+    for record in route.price_history:
+        writer.writerow([
+            record.checked_at.strftime('%Y-%m-%d %H:%M:%S'),
+            record.price,
+            record.currency,
+            record.airline_name or record.airline or '',
+            record.duration or '',
+            record.stops,
+        ])
+
+    filename = f"{route.origin}-{route.destination}-{route.departure_date}.csv"
+    return Response(
+        output.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+    )
+
+
 @bp.route('/api/airports')
 def api_airports():
     query = request.args.get('q', '').upper().strip()

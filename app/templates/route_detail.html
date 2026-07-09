@@ -108,6 +108,12 @@
     <i class="bi bi-{{ 'pause-fill' if route.active else 'play-fill' }} me-1"></i>
     {{ 'Pause' if route.active else 'Resume' }} Tracking
   </button>
+  <a href="{{ url_for('main.edit_route', route_id=route.id) }}" class="btn btn-outline-secondary">
+    <i class="bi bi-pencil me-1"></i>Edit Alert
+  </a>
+  <a href="{{ url_for('main.export_history', route_id=route.id) }}" class="btn btn-outline-secondary">
+    <i class="bi bi-download me-1"></i>Export CSV
+  </a>
   <form method="POST" action="{{ url_for('main.delete_route', route_id=route.id) }}"
     onsubmit="return confirm('Remove this route and all its price history?');"
     class="ms-auto">
