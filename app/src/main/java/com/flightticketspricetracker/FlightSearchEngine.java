@@ -15,7 +15,7 @@ public final class FlightSearchEngine {
         String error = criteria == null ? "Search criteria are required." : criteria.firstValidationError();
         if (error != null) throw new IllegalArgumentException(error);
 
-        int seed = Math.abs(criteria.stableKey().hashCode());
+        int seed = criteria.stableKey().hashCode() & 0x7fffffff;
         int routeFactor = 120 + (seed % 260);
         double cabinMultiplier = criteria.cabin.toLowerCase(Locale.CANADA).contains("business")
                 ? 2.65
