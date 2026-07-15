@@ -63,22 +63,41 @@ public class MainActivity extends Activity {
     private int parseInt(EditText edit, int fallback) { try { return Integer.parseInt(edit.getText().toString().trim()); } catch (Exception ignored) { return fallback; } }
 
     private void runSearch() {
-        results.removeAllViews();
         int count = parseInt(passengers, 1);
         List<FareQuote> quotes = engine.search(origin.getText().toString(), destination.getText().toString(), String.valueOf(cabin.getSelectedItem()), roundTrip.isChecked(), count);
-        results.addView(label("Best fares", 21, true));
+        
+        // Fix: Implement efficient view recycling instead of removing all views
+        // Keep the title (first child) and remove only the old search results
+        int childCount = results.getChildCount();
+        if (childCount > 1) {
+            results.removeViews(1, childCount - 1);
+        }
+        
+        // Add title only if it doesn't exist
+        if (childCount == 0) {
+            results.addView(label("Best fares", 21, true));
+        }
+        
+        // Add new results
         for (FareQuote quote : quotes) {
             TextView row = label(quote.summary(), 16, false);
-            row.setGravity(Gravity.START); row.setBackgroundColor(Color.rgb(239, 248, 251)); row.setPadding(18, 18, 18, 18);
+            row.setGravity(Gravity.START); 
+            row.setBackgroundColor(Color.rgb(239, 248, 251)); 
+            row.setPadding(18, 18, 18, 18);
             results.addView(row);
         }
     }
 
     private void saveAlert() {
         PriceAlert alert = new PriceAlert(origin.getText().toString(), destination.getText().toString(), parseInt(target, 350));
-        prefs.edit().putString("latest", alert.encode()).apply();
-        Toast.makeText(this, "Alert saved: " + alert.summary(), Toast.LENGTH_LONG).show();
-        loadAlerts();
+        // Fix: Use background thread for SharedPreferences to avoid blocking main thread
+        new Thread(() -> {
+            prefs.edit().putString("latest", alert.encode()).apply();
+            runOnUiThread(() -> {
+                Toast.makeText(MainActivity.this, "Alert saved: " + alert.summary(), Toast.LENGTH_LONG).show();
+                loadAlerts();
+            });
+        }).start();
     }
 
     private void loadAlerts() {
