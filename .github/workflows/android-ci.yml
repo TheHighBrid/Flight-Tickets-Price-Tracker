@@ -1,0 +1,33 @@
+name: Android CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Test, lint, and build installable beta APK
+        run: gradle --no-daemon test lint assembleDebug
+      - name: Upload beta APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: flight-tickets-price-tracker-beta-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
