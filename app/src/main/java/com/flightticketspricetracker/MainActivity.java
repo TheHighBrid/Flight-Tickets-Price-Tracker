@@ -1,66 +1,209 @@
 package com.flightticketspricetracker;
 
 import android.app.Activity;
-import android.content.SharedPreferences;
+import android.app.AlertDialog;
+import android.app.DatePickerDialog;
 import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
+import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
-import android.widget.*;
+import android.view.ViewGroup;
+import android.widget.ArrayAdapter;
+import android.widget.AutoCompleteTextView;
+import android.widget.Button;
+import android.widget.CheckBox;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.Spinner;
+import android.widget.TextView;
+import android.widget.Toast;
 
+import java.time.LocalDate;
+import java.util.Collections;
 import java.util.List;
 
 public class MainActivity extends Activity {
-    private final FlightSearchEngine engine = new FlightSearchEngine();
-    private LinearLayout results;
-    private TextView alerts;
-    private EditText origin;
-    private EditText destination;
-    private EditText passengers;
-    private EditText target;
-    private Spinner cabin;
-    private CheckBox roundTrip;
-    private SharedPreferences prefs;
+    private static final int BRAND = Color.rgb(23, 107, 135);
+    private static final int INK = Color.rgb(24, 35, 39);
+    private static final int MUTED = Color.rgb(88, 105, 111);
+    private static final int SURFACE = Color.rgb(239, 248, 251);
+    private static final int WARNING = Color.rgb(255, 247, 221);
 
-    @Override public void onCreate(Bundle savedInstanceState) {
+    private final FlightSearchEngine engine = new FlightSearchEngine();
+    private final AlertEvaluator alertEvaluator = new AlertEvaluator(engine);
+
+    private AlertRepository alertRepository;
+    private AutoCompleteTextView origin;
+    private AutoCompleteTextView destination;
+    private EditText departureDate;
+    private EditText returnDate;
+    private EditText passengers;
+    private EditText targetPrice;
+    private Spinner cabin;
+    private Spinner currency;
+    private CheckBox roundTrip;
+    private LinearLayout resultsContainer;
+    private LinearLayout alertsContainer;
+    private TextView returnDateLabel;
+
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        prefs = getSharedPreferences("alerts", MODE_PRIVATE);
+        alertRepository = new AlertRepository(this);
         setContentView(buildUi());
-        loadAlerts();
+        setInitialDates();
+        renderAlerts(Collections.emptyList());
         runSearch();
     }
 
     private View buildUi() {
         ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(32, 32, 32, 32);
-        scroll.addView(root);
-        TextView title = label("Flight Tickets Price Tracker", 26, true);
-        title.setTextColor(Color.rgb(23,107,135));
+        root.setPadding(dp(20), dp(20), dp(20), dp(40));
+        root.setBackgroundColor(Color.WHITE);
+        scroll.addView(root, new ScrollView.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+
+        TextView title = text("Flight Tickets Price Tracker", 27, true, INK);
         root.addView(title);
-        root.addView(label("Find useful fares and save target-price alerts.", 15, false));
-        origin = input("Origin airport or city", "JFK"); root.addView(origin);
-        destination = input("Destination airport or city", "LAX"); root.addView(destination);
-        passengers = input("Passengers", "1"); passengers.setInputType(2); root.addView(passengers);
-        cabin = new Spinner(this); cabin.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, new String[]{"Economy", "Premium Economy", "Business"})); root.addView(cabin);
-        roundTrip = new CheckBox(this); roundTrip.setText("Round trip"); roundTrip.setChecked(true); root.addView(roundTrip);
-        Button search = new Button(this); search.setText("Search fares"); search.setOnClickListener(v -> runSearch()); root.addView(search);
-        target = input("Alert target USD", "350"); target.setInputType(2); root.addView(target);
-        Button save = new Button(this); save.setText("Save price alert"); save.setOnClickListener(v -> saveAlert()); root.addView(save);
-        alerts = label("", 16, false); root.addView(alerts);
-        results = new LinearLayout(this); results.setOrientation(LinearLayout.VERTICAL); root.addView(results);
+        TextView subtitle = text("Search demo fares, compare totals, and track price targets locally.", 15, false, MUTED);
+        subtitle.setPadding(0, dp(4), 0, dp(14));
+        root.addView(subtitle);
+
+        TextView demoNotice = text(
+                "DEMO MODE • Prices are generated on-device and are not live airline fares. Connect a secure backend provider before using this app for purchase decisions.",
+                13,
+                true,
+                Color.rgb(93, 69, 7)
+        );
+        demoNotice.setBackground(cardBackground(WARNING, Color.rgb(232, 203, 118)));
+        demoNotice.setPadding(dp(14), dp(12), dp(14), dp(12));
+        root.addView(demoNotice, spacedParams(0, dp(12)));
+
+        root.addView(sectionTitle("Search"));
+        origin = airportInput("Origin airport", "Ottawa (YOW)");
+        root.addView(fieldLabel("Origin"));
+        root.addView(origin);
+
+        destination = airportInput("Destination airport", "Casablanca (CMN)");
+        root.addView(fieldLabel("Destination"));
+        root.addView(destination);
+
+        departureDate = dateInput();
+        root.addView(fieldLabel("Departure date"));
+        root.addView(departureDate);
+
+        returnDateLabel = fieldLabel("Return date");
+        root.addView(returnDateLabel);
+        returnDate = dateInput();
+        root.addView(returnDate);
+
+        passengers = standardInput("1");
+        passengers.setHint("1 to 9");
+        passengers.setInputType(InputType.TYPE_CLASS_NUMBER);
+        root.addView(fieldLabel("Passengers"));
+        root.addView(passengers);
+
+        cabin = spinner(new String[]{"Economy", "Premium Economy", "Business"});
+        root.addView(fieldLabel("Cabin"));
+        root.addView(cabin);
+
+        currency = spinner(new String[]{"CAD", "USD"});
+        root.addView(fieldLabel("Display currency"));
+        root.addView(currency);
+
+        roundTrip = new CheckBox(this);
+        roundTrip.setText("Round trip");
+        roundTrip.setTextColor(INK);
+        roundTrip.setTextSize(16);
+        roundTrip.setChecked(true);
+        roundTrip.setPadding(0, dp(8), 0, dp(8));
+        roundTrip.setOnCheckedChangeListener((buttonView, checked) -> {
+            int visibility = checked ? View.VISIBLE : View.GONE;
+            returnDateLabel.setVisibility(visibility);
+            returnDate.setVisibility(visibility);
+        });
+        root.addView(roundTrip);
+
+        Button searchButton = primaryButton("Search demo fares");
+        searchButton.setOnClickListener(view -> runSearch());
+        root.addView(searchButton, spacedParams(dp(4), dp(10)));
+
+        resultsContainer = new LinearLayout(this);
+        resultsContainer.setOrientation(LinearLayout.VERTICAL);
+        root.addView(resultsContainer);
+
+        root.addView(sectionTitle("Price alerts"));
+        targetPrice = standardInput("700");
+        targetPrice.setHint("Target total price");
+        targetPrice.setInputType(InputType.TYPE_CLASS_NUMBER);
+        root.addView(fieldLabel("Target total price"));
+        root.addView(targetPrice);
+
+        LinearLayout alertActions = new LinearLayout(this);
+        alertActions.setOrientation(LinearLayout.HORIZONTAL);
+        alertActions.setGravity(Gravity.CENTER_VERTICAL);
+
+        Button saveAlert = primaryButton("Save alert");
+        saveAlert.setOnClickListener(view -> saveAlert());
+        alertActions.addView(saveAlert, weightedButtonParams(1f, dp(6)));
+
+        Button checkAlerts = secondaryButton("Check now");
+        checkAlerts.setOnClickListener(view -> checkAlertsNow());
+        alertActions.addView(checkAlerts, weightedButtonParams(1f, 0));
+        root.addView(alertActions, spacedParams(dp(4), dp(12)));
+
+        Button clearAlerts = secondaryButton("Clear all alerts");
+        clearAlerts.setOnClickListener(view -> confirmClearAlerts());
+        root.addView(clearAlerts, spacedParams(0, dp(10)));
+
+        alertsContainer = new LinearLayout(this);
+        alertsContainer.setOrientation(LinearLayout.VERTICAL);
+        root.addView(alertsContainer);
+
         return scroll;
     }
 
-    private TextView label(String text, int sp, boolean bold) {
-        TextView view = new TextView(this); view.setText(text); view.setTextSize(sp); view.setPadding(0, 12, 0, 12);
-        if (bold) view.setTypeface(android.graphics.Typeface.DEFAULT_BOLD); return view;
+    private void setInitialDates() {
+        LocalDate departure = LocalDate.now().plusDays(30);
+        departureDate.setText(departure.toString());
+        returnDate.setText(departure.plusDays(7).toString());
     }
 
-    private EditText input(String hint, String text) { EditText edit = new EditText(this); edit.setHint(hint); edit.setText(text); edit.setSingleLine(true); return edit; }
+    private void runSearch() {
+        SearchCriteria criteria = readCriteria();
+        String error = criteria.firstValidationError();
+        if (error != null) {
+            showMessage(error);
+            return;
+        }
 
-    private int parseInt(EditText edit, int fallback) { try { return Integer.parseInt(edit.getText().toString().trim()); } catch (Exception ignored) { return fallback; } }
+        List<FareQuote> quotes;
+        try {
+            quotes = engine.search(criteria);
+        } catch (IllegalArgumentException exception) {
+            showMessage(exception.getMessage());
+            return;
+        }
+
+        resultsContainer.removeAllViews();
+        TextView heading = text("Best demo fares", 21, true, INK);
+        heading.setPadding(0, dp(18), 0, dp(4));
+        resultsContainer.addView(heading);
+        TextView detail = text(criteria.route() + " • " + criteria.departureDate
+                + (criteria.roundTrip ? " to " + criteria.returnDate : "")
+                + " • " + criteria.passengers + (criteria.passengers == 1 ? " traveller" : " travellers"), 14, false, MUTED);
+        detail.setPadding(0, 0, 0, dp(8));
+        resultsContainer.addView(detail);
 
     private void runSearch() {
         int count = parseInt(passengers, 1);
@@ -100,8 +243,7 @@ public class MainActivity extends Activity {
         }).start();
     }
 
-    private void loadAlerts() {
-        String raw = prefs.getString("latest", null);
-        alerts.setText(raw == null ? "No saved alerts yet." : "Saved alert: " + PriceAlert.decode(raw).summary());
+    private void showMessage(String message) {
+        Toast.makeText(this, message == null ? "Something went wrong." : message, Toast.LENGTH_LONG).show();
     }
 }

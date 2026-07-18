@@ -1,12 +1,27 @@
 package com.flightticketspricetracker;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
 public final class FlightSearchEngine {
-    private static final String[] AIRLINES = {"SkyBridge", "Atlantic Air", "PacificJet", "Nimbus", "Liberty Wings"};
+    private static final String[] AIRLINES = {
+            "Northstar Air", "Atlas Connect", "Maple Jet", "Cloudline", "Horizon Wings", "Aero Nova", "Blue Arc"
+    };
+
+    public List<FareQuote> search(SearchCriteria criteria) {
+        String error = criteria == null ? "Search criteria are required." : criteria.firstValidationError();
+        if (error != null) throw new IllegalArgumentException(error);
+
+        int seed = criteria.stableKey().hashCode() & 0x7fffffff;
+        int routeFactor = 120 + (seed % 260);
+        double cabinMultiplier = criteria.cabin.toLowerCase(Locale.CANADA).contains("business")
+                ? 2.65
+                : criteria.cabin.toLowerCase(Locale.CANADA).contains("premium") ? 1.55 : 1.0;
+        double tripMultiplier = criteria.roundTrip ? 1.78 : 1.0;
+        double currencyMultiplier = "CAD".equals(criteria.currency) ? 1.18 : 1.0;
 
     public List<FareQuote> search(String origin, String destination, String cabin, boolean roundTrip, int passengers) {
         String from = normalizeAirport(origin);
@@ -30,8 +45,13 @@ public final class FlightSearchEngine {
             int price = (int) Math.round((base + (i * 37) + (stops * 26)) * cabinMultiplier * tripMultiplier * safePassengers);
             results.add(new FareQuote(AIRLINES[i], route, (6 + i * 2) + ":" + (i % 2 == 0 ? "15" : "45"), (9 + i * 2) + ":" + (i % 2 == 0 ? "55" : "20"), stops, price, cabinName));
         }
-        results.sort(Comparator.comparingInt(q -> q.priceUsd));
+        results.sort(Comparator.comparingInt(quote -> quote.totalPrice));
         return results;
+    }
+
+    public int bestPrice(SearchCriteria criteria) {
+        List<FareQuote> quotes = search(criteria);
+        return quotes.get(0).totalPrice;
     }
 
     public static String normalizeAirport(String value) {
