@@ -29,7 +29,7 @@ jobs:
           mkdir -p dist
           cp app/build/outputs/apk/debug/app-debug.apk dist/flight-tickets-price-tracker-${GITHUB_REF_NAME}.apk
       - name: Upload beta APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: flight-tickets-price-tracker-${{ github.ref_name }}-apk
           path: dist/*.apk
