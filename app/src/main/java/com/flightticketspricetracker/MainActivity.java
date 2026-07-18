@@ -205,274 +205,42 @@ public class MainActivity extends Activity {
         detail.setPadding(0, 0, 0, dp(8));
         resultsContainer.addView(detail);
 
+    private void runSearch() {
+        int count = parseInt(passengers, 1);
+        List<FareQuote> quotes = engine.search(origin.getText().toString(), destination.getText().toString(), String.valueOf(cabin.getSelectedItem()), roundTrip.isChecked(), count);
+        
+        // Fix: Implement efficient view recycling instead of removing all views
+        // Keep the title (first child) and remove only the old search results
+        int childCount = results.getChildCount();
+        if (childCount > 1) {
+            results.removeViews(1, childCount - 1);
+        }
+        
+        // Add title only if it doesn't exist
+        if (childCount == 0) {
+            results.addView(label("Best fares", 21, true));
+        }
+        
+        // Add new results
         for (FareQuote quote : quotes) {
-            TextView row = text(quote.summary(), 16, false, INK);
-            row.setLineSpacing(0, 1.08f);
-            row.setBackground(cardBackground(SURFACE, Color.rgb(198, 225, 234)));
-            row.setPadding(dp(16), dp(14), dp(16), dp(14));
-            row.setOnClickListener(view -> {
-                targetPrice.setText(Integer.toString(quote.totalPrice));
-                showMessage("Target set to " + quote.priceLabel() + ".");
-            });
-            resultsContainer.addView(row, spacedParams(dp(4), dp(6)));
+            TextView row = label(quote.summary(), 16, false);
+            row.setGravity(Gravity.START); 
+            row.setBackgroundColor(Color.rgb(239, 248, 251)); 
+            row.setPadding(18, 18, 18, 18);
+            results.addView(row);
         }
     }
 
     private void saveAlert() {
-        SearchCriteria criteria = readCriteria();
-        String error = criteria.firstValidationError();
-        if (error != null) {
-            showMessage(error);
-            return;
-        }
-
-        int target = parsePositiveInt(targetPrice, -1);
-        if (target < 1) {
-            targetPrice.setError("Enter a target greater than zero.");
-            return;
-        }
-
-        try {
-            PriceAlert alert = new PriceAlert(criteria, target);
-            alertRepository.save(alert);
-            renderAlerts(Collections.emptyList());
-            showMessage("Alert saved locally.");
-        } catch (IllegalArgumentException exception) {
-            showMessage(exception.getMessage());
-        }
-    }
-
-    private void checkAlertsNow() {
-        List<PriceAlert> alerts = alertRepository.load();
-        if (alerts.isEmpty()) {
-            showMessage("Save an alert first.");
-            return;
-        }
-        List<AlertEvaluator.Result> evaluations = alertEvaluator.evaluate(alerts);
-        renderAlerts(evaluations);
-        int reached = 0;
-        for (AlertEvaluator.Result result : evaluations) if (result.targetReached) reached++;
-        showMessage(reached == 0 ? "No demo targets reached." : reached + " demo target" + (reached == 1 ? " reached." : "s reached."));
-    }
-
-    private void renderAlerts(List<AlertEvaluator.Result> evaluations) {
-        if (alertsContainer == null) return;
-        alertsContainer.removeAllViews();
-        List<PriceAlert> alerts = alertRepository.load();
-        if (alerts.isEmpty()) {
-            TextView empty = text("No saved alerts yet.", 15, false, MUTED);
-            empty.setPadding(0, dp(8), 0, 0);
-            alertsContainer.addView(empty);
-            return;
-        }
-
-        for (PriceAlert alert : alerts) {
-            LinearLayout card = new LinearLayout(this);
-            card.setOrientation(LinearLayout.VERTICAL);
-            card.setPadding(dp(14), dp(12), dp(14), dp(10));
-            card.setBackground(cardBackground(Color.WHITE, Color.rgb(211, 220, 224)));
-
-            TextView summary = text(alert.summary(), 14, false, INK);
-            card.addView(summary);
-
-            AlertEvaluator.Result evaluation = findEvaluation(evaluations, alert.key());
-            if (evaluation != null) {
-                TextView status = text(evaluation.summary(), 14, true,
-                        evaluation.targetReached ? Color.rgb(21, 115, 67) : BRAND);
-                status.setPadding(0, dp(8), 0, 0);
-                card.addView(status);
-            }
-
-            Button delete = secondaryButton("Delete");
-            delete.setOnClickListener(view -> {
-                alertRepository.delete(alert.key());
-                renderAlerts(Collections.emptyList());
+        PriceAlert alert = new PriceAlert(origin.getText().toString(), destination.getText().toString(), parseInt(target, 350));
+        // Fix: Use background thread for SharedPreferences to avoid blocking main thread
+        new Thread(() -> {
+            prefs.edit().putString("latest", alert.encode()).apply();
+            runOnUiThread(() -> {
+                Toast.makeText(MainActivity.this, "Alert saved: " + alert.summary(), Toast.LENGTH_LONG).show();
+                loadAlerts();
             });
-            LinearLayout.LayoutParams deleteParams = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT
-            );
-            deleteParams.gravity = Gravity.END;
-            deleteParams.topMargin = dp(8);
-            card.addView(delete, deleteParams);
-            alertsContainer.addView(card, spacedParams(dp(3), dp(5)));
-        }
-    }
-
-    private AlertEvaluator.Result findEvaluation(List<AlertEvaluator.Result> evaluations, String key) {
-        if (evaluations == null) return null;
-        for (AlertEvaluator.Result result : evaluations) {
-            if (result.alert.key().equals(key)) return result;
-        }
-        return null;
-    }
-
-    private void confirmClearAlerts() {
-        if (alertRepository.load().isEmpty()) {
-            showMessage("There are no alerts to clear.");
-            return;
-        }
-        new AlertDialog.Builder(this)
-                .setTitle("Clear all alerts?")
-                .setMessage("This removes every locally saved price alert.")
-                .setNegativeButton("Cancel", null)
-                .setPositiveButton("Clear", (dialog, which) -> {
-                    alertRepository.clear();
-                    renderAlerts(Collections.emptyList());
-                })
-                .show();
-    }
-
-    private SearchCriteria readCriteria() {
-        return new SearchCriteria(
-                origin.getText().toString(),
-                destination.getText().toString(),
-                departureDate.getText().toString(),
-                returnDate.getText().toString(),
-                String.valueOf(cabin.getSelectedItem()),
-                roundTrip.isChecked(),
-                parsePositiveInt(passengers, 0),
-                String.valueOf(currency.getSelectedItem())
-        );
-    }
-
-    private AutoCompleteTextView airportInput(String hint, String value) {
-        AutoCompleteTextView input = new AutoCompleteTextView(this);
-        input.setHint(hint);
-        input.setText(value);
-        input.setSingleLine(true);
-        input.setThreshold(1);
-        input.setTextColor(INK);
-        input.setHintTextColor(MUTED);
-        input.setTextSize(16);
-        input.setPadding(dp(12), dp(10), dp(12), dp(10));
-        input.setBackground(cardBackground(Color.WHITE, Color.rgb(190, 204, 210)));
-        input.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_dropdown_item_1line, AirportCatalog.suggestions()));
-        return input;
-    }
-
-    private EditText standardInput(String value) {
-        EditText input = new EditText(this);
-        input.setText(value);
-        input.setSingleLine(true);
-        input.setTextColor(INK);
-        input.setHintTextColor(MUTED);
-        input.setTextSize(16);
-        input.setPadding(dp(12), dp(10), dp(12), dp(10));
-        input.setBackground(cardBackground(Color.WHITE, Color.rgb(190, 204, 210)));
-        return input;
-    }
-
-    private EditText dateInput() {
-        EditText input = standardInput("");
-        input.setFocusable(false);
-        input.setClickable(true);
-        input.setInputType(InputType.TYPE_NULL);
-        input.setOnClickListener(view -> showDatePicker(input));
-        return input;
-    }
-
-    private void showDatePicker(EditText target) {
-        LocalDate initial;
-        try {
-            initial = LocalDate.parse(target.getText().toString());
-        } catch (RuntimeException ignored) {
-            initial = LocalDate.now().plusDays(30);
-        }
-        DatePickerDialog dialog = new DatePickerDialog(
-                this,
-                (picker, year, month, day) -> target.setText(LocalDate.of(year, month + 1, day).toString()),
-                initial.getYear(),
-                initial.getMonthValue() - 1,
-                initial.getDayOfMonth()
-        );
-        dialog.getDatePicker().setMinDate(System.currentTimeMillis() - 1000L);
-        dialog.show();
-    }
-
-    private Spinner spinner(String[] values) {
-        Spinner spinner = new Spinner(this);
-        spinner.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, values));
-        spinner.setPadding(dp(4), dp(4), dp(4), dp(4));
-        return spinner;
-    }
-
-    private TextView sectionTitle(String value) {
-        TextView heading = text(value, 21, true, INK);
-        heading.setPadding(0, dp(24), 0, dp(8));
-        return heading;
-    }
-
-    private TextView fieldLabel(String value) {
-        TextView label = text(value, 13, true, MUTED);
-        label.setPadding(0, dp(10), 0, dp(4));
-        return label;
-    }
-
-    private TextView text(String value, int sp, boolean bold, int color) {
-        TextView view = new TextView(this);
-        view.setText(value);
-        view.setTextSize(sp);
-        view.setTextColor(color);
-        if (bold) view.setTypeface(Typeface.DEFAULT_BOLD);
-        return view;
-    }
-
-    private Button primaryButton(String label) {
-        Button button = new Button(this);
-        button.setText(label);
-        button.setTextColor(Color.WHITE);
-        button.setTextSize(15);
-        button.setAllCaps(false);
-        button.setTypeface(Typeface.DEFAULT_BOLD);
-        button.setBackground(cardBackground(BRAND, BRAND));
-        return button;
-    }
-
-    private Button secondaryButton(String label) {
-        Button button = new Button(this);
-        button.setText(label);
-        button.setTextColor(BRAND);
-        button.setTextSize(14);
-        button.setAllCaps(false);
-        button.setBackground(cardBackground(Color.WHITE, Color.rgb(160, 194, 205)));
-        return button;
-    }
-
-    private GradientDrawable cardBackground(int fill, int stroke) {
-        GradientDrawable drawable = new GradientDrawable();
-        drawable.setColor(fill);
-        drawable.setCornerRadius(dp(10));
-        drawable.setStroke(dp(1), stroke);
-        return drawable;
-    }
-
-    private LinearLayout.LayoutParams spacedParams(int top, int bottom) {
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-        );
-        params.topMargin = top;
-        params.bottomMargin = bottom;
-        return params;
-    }
-
-    private LinearLayout.LayoutParams weightedButtonParams(float weight, int endMargin) {
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(52), weight);
-        params.rightMargin = endMargin;
-        return params;
-    }
-
-    private int parsePositiveInt(EditText input, int fallback) {
-        try {
-            return Integer.parseInt(input.getText().toString().trim());
-        } catch (RuntimeException ignored) {
-            return fallback;
-        }
-    }
-
-    private int dp(int value) {
-        return Math.round(value * getResources().getDisplayMetrics().density);
+        }).start();
     }
 
     private void showMessage(String message) {
