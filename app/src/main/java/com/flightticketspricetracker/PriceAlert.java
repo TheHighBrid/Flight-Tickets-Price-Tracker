@@ -1,32 +1,22 @@
 package com.flightticketspricetracker;
 
-import java.time.LocalDate;
+import java.math.BigDecimal;
 
 public final class PriceAlert {
-    private static final String VERSION = "v2";
+    private static final String VERSION = "v3";
 
     public final SearchCriteria criteria;
-    public final int targetPrice;
+    public final BigDecimal targetPrice;
 
-    public PriceAlert(SearchCriteria criteria, int targetPrice) {
-        if (criteria == null || !criteria.isValid()) throw new IllegalArgumentException("A valid search is required before saving an alert.");
-        if (targetPrice < 1) throw new IllegalArgumentException("Target price must be greater than zero.");
+    public PriceAlert(SearchCriteria criteria, BigDecimal targetPrice) {
+        if (criteria == null || !criteria.isValid()) {
+            throw new IllegalArgumentException("A valid live-flight search is required before saving an alert.");
+        }
+        if (targetPrice == null || targetPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Target price must be greater than zero.");
+        }
         this.criteria = criteria;
-        this.targetPrice = targetPrice;
-    }
-
-    @Deprecated
-    public PriceAlert(String origin, String destination, int targetUsd) {
-        this(new SearchCriteria(
-                origin,
-                destination,
-                LocalDate.now().plusDays(30).toString(),
-                LocalDate.now().plusDays(37).toString(),
-                "Economy",
-                true,
-                1,
-                "USD"
-        ), targetUsd);
+        this.targetPrice = targetPrice.stripTrailingZeros();
     }
 
     public String key() {
@@ -40,29 +30,25 @@ public final class PriceAlert {
                 criteria.destination,
                 criteria.departureDate,
                 criteria.roundTrip ? criteria.returnDate : "",
-                criteria.cabin,
+                criteria.cabin.replace(" ", "_"),
                 Boolean.toString(criteria.roundTrip),
+                Boolean.toString(criteria.nonStop),
                 Integer.toString(criteria.passengers),
                 criteria.currency,
-                Integer.toString(targetPrice)
+                targetPrice.toPlainString()
         );
     }
 
     public static PriceAlert decode(String raw) {
         if (raw == null || raw.trim().isEmpty()) throw new IllegalArgumentException("Invalid alert");
-        if (raw.startsWith(VERSION + "|")) {
-            String[] parts = raw.split("\\|", -1);
-            if (parts.length != 10) throw new IllegalArgumentException("Invalid v2 alert");
-            SearchCriteria criteria = new SearchCriteria(
-                    parts[1], parts[2], parts[3], parts[4], parts[5],
-                    Boolean.parseBoolean(parts[6]), Integer.parseInt(parts[7]), parts[8]
-            );
-            return new PriceAlert(criteria, Integer.parseInt(parts[9]));
-        }
-
-        String[] legacy = raw.split(",");
-        if (legacy.length == 3) return new PriceAlert(legacy[0], legacy[1], Integer.parseInt(legacy[2]));
-        throw new IllegalArgumentException("Invalid alert");
+        String[] parts = raw.split("\\|", -1);
+        if (parts.length != 11 || !VERSION.equals(parts[0])) throw new IllegalArgumentException("Unsupported alert format");
+        SearchCriteria criteria = new SearchCriteria(
+                parts[1], parts[2], parts[3], parts[4], parts[5].replace('_', ' '),
+                Boolean.parseBoolean(parts[6]), Boolean.parseBoolean(parts[7]),
+                Integer.parseInt(parts[8]), parts[9]
+        );
+        return new PriceAlert(criteria, new BigDecimal(parts[10]));
     }
 
     public static PriceAlert tryDecode(String raw) {
@@ -77,6 +63,7 @@ public final class PriceAlert {
         String dates = criteria.departureDate + (criteria.roundTrip ? " to " + criteria.returnDate : "");
         return criteria.route() + " • " + dates + " • " + criteria.cabin + " • "
                 + criteria.passengers + (criteria.passengers == 1 ? " traveller" : " travellers")
-                + " • below " + criteria.currency + " $" + targetPrice;
+                + (criteria.nonStop ? " • nonstop only" : "")
+                + " • target " + criteria.currency + " $" + targetPrice.toPlainString();
     }
 }

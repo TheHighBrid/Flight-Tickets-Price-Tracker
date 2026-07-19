@@ -9,15 +9,13 @@ import java.util.List;
 
 public final class AlertRepository {
     private static final String PREFS_NAME = "alerts";
-    private static final String KEY_ALERTS = "saved_alerts_v2";
-    private static final String LEGACY_KEY = "latest";
+    private static final String KEY_ALERTS = "saved_live_alerts_v3";
     private static final int MAX_ALERTS = 25;
 
     private final SharedPreferences preferences;
 
     public AlertRepository(Context context) {
         preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        migrateLegacyAlert();
     }
 
     public List<PriceAlert> load() {
@@ -50,7 +48,7 @@ public final class AlertRepository {
     }
 
     public void clear() {
-        preferences.edit().remove(KEY_ALERTS).remove(LEGACY_KEY).apply();
+        preferences.edit().remove(KEY_ALERTS).apply();
     }
 
     private void persist(List<PriceAlert> alerts) {
@@ -60,16 +58,5 @@ public final class AlertRepository {
             encoded.append(alert.encode());
         }
         preferences.edit().putString(KEY_ALERTS, encoded.toString()).apply();
-    }
-
-    private void migrateLegacyAlert() {
-        if (preferences.contains(KEY_ALERTS)) return;
-        PriceAlert legacy = PriceAlert.tryDecode(preferences.getString(LEGACY_KEY, null));
-        if (legacy != null) {
-            List<PriceAlert> alerts = new ArrayList<>();
-            alerts.add(legacy);
-            persist(alerts);
-        }
-        preferences.edit().remove(LEGACY_KEY).apply();
     }
 }

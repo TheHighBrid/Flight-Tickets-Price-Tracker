@@ -2,6 +2,10 @@ plugins {
     id 'com.android.application'
 }
 
+def configuredBackendUrl = (System.getenv('FLIGHT_API_BASE_URL') ?: '')
+        .replace('\\', '\\\\')
+        .replace('"', '\\"')
+
 android {
     namespace 'com.flightticketspricetracker'
     compileSdk 35
@@ -10,9 +14,14 @@ android {
         applicationId 'com.flightticketspricetracker'
         minSdk 23
         targetSdk 35
-        versionCode 3
-        versionName '1.1.1-beta'
+        versionCode 4
+        versionName '2.0.0-beta'
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+        buildConfigField 'String', 'DEFAULT_BACKEND_URL', "\"${configuredBackendUrl}\""
+    }
+
+    buildFeatures {
+        buildConfig true
     }
 
     compileOptions {
@@ -33,5 +42,6 @@ android {
 
 dependencies {
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
+    implementation 'androidx.work:work-runtime:2.11.2'
     testImplementation 'junit:junit:4.13.2'
 }

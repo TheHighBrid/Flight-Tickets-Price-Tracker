@@ -1,27 +1,57 @@
 # Architecture
 
-## Product boundary
+## Product rule
 
-The Android client is a demo-first flight search and alert application. It is complete enough to validate the local product flow, but it intentionally stops before live-provider integration because provider secrets cannot be safely shipped in an APK.
+The application may return provider data or an explicit error. It may never manufacture an airline, itinerary, or price.
 
-## Data flow
+## Android client
 
-1. `MainActivity` collects user input.
-2. `SearchCriteria` resolves airports and validates dates, route, passengers, cabin, and currency.
-3. `FlightSearchEngine` generates deterministic sample quotes and sorts them by total price.
-4. A selected search can be stored as a versioned `PriceAlert`.
-5. `AlertRepository` persists alerts locally and migrates the original comma-separated alert format.
-6. `AlertEvaluator` reruns saved searches and compares the best result with each target.
+### Search flow
 
-## Live-provider seam
+1. `MainActivity` validates route, dates, passengers, cabin, nonstop preference, and currency.
+2. `FlightServiceFactory` selects one real data source:
+   - `BackendFlightService`, recommended for production.
+   - `AmadeusFlightService`, owner-only direct mode.
+3. `AmadeusResponseParser` maps the official response into `FareQuote` objects.
+4. Carrier names come from `dictionaries.carriers`. When a name is absent, the real IATA carrier code is shown rather than an invented name.
+5. Results display provider environment and verification time.
 
-For production, introduce a `FareProvider` abstraction with two implementations:
+### Credentials
 
-- `DemoFareProvider`, backed by the existing deterministic engine.
-- `RemoteFareProvider`, backed by an HTTPS API owned by the project.
+`SecureConfigStore` encrypts provider configuration with AES-GCM using a key generated in Android Keystore. Provider secrets are never committed to the repository or built into the APK.
 
-The remote API should perform provider authentication, input validation, normalization, caching, rate limiting, and observability. The Android client should receive short-lived, non-sensitive responses only.
+Direct mode is a private-device convenience. A public deployment must use the backend so provider secrets remain server-side.
 
-## Background alerts
+### Tracking
 
-Background checking should be added only after live fares exist. A production implementation would use WorkManager with network constraints, server-controlled cadence, notification channels, and Android 13+ notification permission handling. Running periodic checks against the current simulator would create misleading notifications, so this version keeps alert evaluation manual and clearly labeled.
+- `AlertRepository` stores up to 25 search targets.
+- `PriceHistoryRepository` stores the latest 30 provider observations per alert.
+- `AlertCheckWorker` performs connected-network checks through WorkManager.
+- `AlertScheduler` schedules unique periodic work every six hours.
+- `NotificationHelper` posts a notification only when a provider price is at or below the saved target.
+
+Android may delay periodic work because of battery optimization and Doze. Checks are reliable background work, not exact alarms.
+
+## Backend
+
+The FastAPI service in `server/`:
+
+- obtains Amadeus OAuth client-credentials tokens;
+- caches tokens until shortly before expiration;
+- proxies Flight Offers Search;
+- retries once after a provider 401;
+- returns the unmodified provider payload inside a small metadata envelope;
+- supports an optional `X-App-Token` gate;
+- returns 503 when provider credentials are absent instead of fabricating data.
+
+Environment variables:
+
+- `AMADEUS_CLIENT_ID`
+- `AMADEUS_CLIENT_SECRET`
+- `AMADEUS_ENVIRONMENT=test|production`
+- `FLIGHT_API_ACCESS_TOKEN`
+- `HTTP_TIMEOUT_SECONDS`
+
+## Provider limitations
+
+Amadeus test data is limited and is not treated as live. Production keys are required for complete production access. Flight Offers Search coverage is determined by Amadeus and does not include every airline.

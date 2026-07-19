@@ -1,4 +1,4 @@
-name: Android Beta Release
+name: Live Flight Tracker Release
 
 on:
   workflow_dispatch:
@@ -12,18 +12,41 @@ permissions:
   contents: write
 
 concurrency:
-  group: android-release-${{ github.ref }}
+  group: live-flight-release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   build-and-release:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+
+      - name: Reject simulated fare code
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -R -n -E 'Northstar Air|Atlas Connect|Maple Jet|Cloudline|Horizon Wings|Aero Nova|Blue Arc|routeFactor|deterministic demo fares' app/src/main; then
+            echo 'Simulated fare or invented airline code is forbidden.' >&2
+            exit 1
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: server/requirements-dev.txt
+
+      - name: Test secure flight backend
+        working-directory: server
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+          pytest -q
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -48,24 +71,20 @@ jobs:
         run: |
           set -euo pipefail
           version="$(sed -n "s/^[[:space:]]*versionName[[:space:]]*'\([^']*\)'.*/\1/p" app/build.gradle | head -n 1)"
-          if [[ -z "$version" ]]; then
-            echo "Unable to read versionName from app/build.gradle" >&2
-            exit 1
-          fi
+          test -n "$version"
           tag="v${version}"
           notes="release/${tag}.md"
-          if [[ ! -f "$notes" ]]; then
-            echo "Missing release notes: $notes" >&2
-            exit 1
-          fi
+          test -f "$notes"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "notes=$notes" >> "$GITHUB_OUTPUT"
 
-      - name: Run core smoke test
+      - name: Run live-model smoke test
         run: bash scripts/smoke_test.sh
 
       - name: Test, lint, and build APK
+        env:
+          FLIGHT_API_BASE_URL: ${{ vars.FLIGHT_API_BASE_URL }}
         run: gradle --no-daemon --stacktrace test lint assembleDebug
 
       - name: Prepare APK and checksum
@@ -73,14 +92,14 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          output="dist/flight-tickets-price-tracker-${{ steps.release_meta.outputs.tag }}.apk"
+          output="dist/live-flight-price-tracker-${{ steps.release_meta.outputs.tag }}.apk"
           cp app/build/outputs/apk/debug/app-debug.apk "$output"
           sha256sum "$output" > "${output}.sha256"
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v7
         with:
-          name: flight-tickets-price-tracker-${{ steps.release_meta.outputs.tag }}-apk
+          name: live-flight-price-tracker-${{ steps.release_meta.outputs.tag }}
           path: |
             dist/*.apk
             dist/*.sha256
@@ -91,7 +110,7 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.release_meta.outputs.tag }}
-          name: Flight Tickets Price Tracker ${{ steps.release_meta.outputs.tag }}
+          name: Live Flight Price Tracker ${{ steps.release_meta.outputs.tag }}
           body_path: ${{ steps.release_meta.outputs.notes }}
           prerelease: true
           make_latest: false
