@@ -9,7 +9,7 @@ A native Android flight-price tracker that queries a real flight-offers provider
 - Actual flight numbers, segments, departure and arrival times, stops, durations, baggage metadata, currencies, and total prices.
 - Secure Android Keystore storage for owner-entered provider credentials.
 - Production-safe backend mode that keeps provider credentials off the phone.
-- Saved target-price alerts checked through WorkManager about every six hours when Android and network conditions permit.
+- Saved target-price alerts checked through JobScheduler about every six hours when Android and network conditions permit.
 - Local provider-price history and notifications when a target is reached.
 - CI fails if the removed invented airlines or deterministic fare generator reappear.
 
