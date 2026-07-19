@@ -41,12 +41,25 @@ jobs:
           cache: pip
           cache-dependency-path: server/requirements-dev.txt
 
+      - name: Create diagnostics directory
+        run: mkdir -p build-logs
+
       - name: Test secure flight backend
-        working-directory: server
+        shell: bash
         run: |
+          set -o pipefail
           python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
-          pytest -q
+          pip install -r server/requirements-dev.txt
+          PYTHONPATH=server python -m pytest -q server/tests 2>&1 | tee build-logs/backend-tests.log
+
+      - name: Upload backend diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-test-diagnostics
+          path: build-logs/backend-tests.log
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
