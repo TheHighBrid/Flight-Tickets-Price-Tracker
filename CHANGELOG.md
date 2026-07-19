@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.1-beta
+
+- Fixed CI after the Android Gradle Plugin 9.3.0 upgrade by moving the build to Gradle 9.5.0.
+- Removed a duplicate Android workflow that depended on a missing Gradle wrapper.
+- Removed an invalid GitHub Packages workflow that called an unconfigured `publish` task.
+- Added explicit Android SDK package installation and a core Java smoke test to CI.
+- Hardened the release workflow with version and release-note validation.
+- Added APK checksum generation and automatic GitHub prerelease publishing.
+
 ## 1.1.0-beta
 
 - Fixed airport normalization that caused the existing San Francisco unit test to fail.

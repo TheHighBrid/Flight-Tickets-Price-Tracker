@@ -46,8 +46,35 @@ jobs:
       - name: Run core smoke test
         run: bash scripts/smoke_test.sh
 
-      - name: Test, lint, and build installable beta APK
-        run: gradle --no-daemon --stacktrace test lint assembleDebug
+      - name: Create diagnostics directory
+        run: mkdir -p build-logs
+
+      - name: Run unit tests
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle --no-daemon --stacktrace test 2>&1 | tee build-logs/unit-tests.log
+
+      - name: Run Android lint
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle --no-daemon --stacktrace lint 2>&1 | tee build-logs/lint.log
+
+      - name: Assemble installable beta APK
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle --no-daemon --stacktrace assembleDebug 2>&1 | tee build-logs/assemble-debug.log
+
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-build-diagnostics
+          path: build-logs/*.log
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Upload beta APK
         uses: actions/upload-artifact@v7
