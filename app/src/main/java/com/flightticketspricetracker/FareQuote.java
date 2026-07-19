@@ -1,6 +1,6 @@
 package com.flightticketspricetracker;
 
-import java.util.Objects;
+import java.util.Locale;
 
 public final class FareQuote {
     public final String airline;
@@ -51,14 +51,8 @@ public final class FareQuote {
     }
 
     public String summary() {
-        // Fix: Add null safety checks to prevent NullPointerException
-        String safeAirline = Objects.toString(airline, "Unknown");
-        String safeRoute = Objects.toString(route, "N/A");
-        String safeDepartTime = Objects.toString(departTime, "N/A");
-        String safeArriveTime = Objects.toString(arriveTime, "N/A");
-        String safeCabin = Objects.toString(cabin, "Unknown");
-        
-        return safeAirline + " • " + safeRoute + " • " + safeDepartTime + " → " + safeArriveTime + 
-               " • " + (stops == 0 ? "Nonstop" : stops + " stop") + " • " + safeCabin + " • $" + priceUsd;
+        return airline + "\n" + route + "  •  " + departTime + " → " + arriveTime
+                + "\n" + stopsLabel() + "  •  " + durationLabel() + "  •  " + cabin
+                + "\n" + priceLabel() + " total";
     }
 }
