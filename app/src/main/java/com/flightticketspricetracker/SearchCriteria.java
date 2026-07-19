@@ -14,6 +14,7 @@ public final class SearchCriteria {
     public final String returnDate;
     public final String cabin;
     public final boolean roundTrip;
+    public final boolean nonStop;
     public final int passengers;
     public final String currency;
 
@@ -24,6 +25,7 @@ public final class SearchCriteria {
             String returnDate,
             String cabin,
             boolean roundTrip,
+            boolean nonStop,
             int passengers,
             String currency
     ) {
@@ -33,14 +35,15 @@ public final class SearchCriteria {
         this.returnDate = clean(returnDate);
         this.cabin = normalizeCabin(cabin);
         this.roundTrip = roundTrip;
+        this.nonStop = nonStop;
         this.passengers = passengers;
         this.currency = normalizeCurrency(currency);
     }
 
     public List<String> validationErrors() {
         List<String> errors = new ArrayList<>();
-        if (origin == null) errors.add("Choose a supported origin airport or enter a valid 3-letter IATA code.");
-        if (destination == null) errors.add("Choose a supported destination airport or enter a valid 3-letter IATA code.");
+        if (origin == null) errors.add("Enter a valid 3-letter origin IATA code.");
+        if (destination == null) errors.add("Enter a valid 3-letter destination IATA code.");
         if (origin != null && origin.equals(destination)) errors.add("Origin and destination must be different.");
         if (passengers < 1 || passengers > 9) errors.add("Passengers must be between 1 and 9.");
 
@@ -76,7 +79,15 @@ public final class SearchCriteria {
     }
 
     public String stableKey() {
-        return route() + "|" + departureDate + "|" + (roundTrip ? returnDate : "") + "|" + cabin + "|" + roundTrip + "|" + passengers + "|" + currency;
+        return route() + "|" + departureDate + "|" + (roundTrip ? returnDate : "") + "|"
+                + cabin + "|" + roundTrip + "|" + nonStop + "|" + passengers + "|" + currency;
+    }
+
+    public String travelClassCode() {
+        if ("Business".equals(cabin)) return "BUSINESS";
+        if ("Premium Economy".equals(cabin)) return "PREMIUM_ECONOMY";
+        if ("First".equals(cabin)) return "FIRST";
+        return "ECONOMY";
     }
 
     private static String clean(String value) {
@@ -87,6 +98,7 @@ public final class SearchCriteria {
         String cabin = clean(value);
         if (cabin.isEmpty()) return "Economy";
         String lower = cabin.toLowerCase(Locale.CANADA);
+        if (lower.contains("first")) return "First";
         if (lower.contains("business")) return "Business";
         if (lower.contains("premium")) return "Premium Economy";
         return "Economy";
@@ -94,7 +106,8 @@ public final class SearchCriteria {
 
     private static String normalizeCurrency(String value) {
         String currency = clean(value).toUpperCase(Locale.CANADA);
-        return "USD".equals(currency) ? "USD" : "CAD";
+        if ("USD".equals(currency) || "EUR".equals(currency) || "MAD".equals(currency)) return currency;
+        return "CAD";
     }
 
     private static LocalDate parseDate(String value) {

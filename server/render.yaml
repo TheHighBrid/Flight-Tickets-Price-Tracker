@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: flight-tickets-price-tracker-api
+    runtime: docker
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: ./server
+    healthCheckPath: /health
+    envVars:
+      - key: AMADEUS_CLIENT_ID
+        sync: false
+      - key: AMADEUS_CLIENT_SECRET
+        sync: false
+      - key: AMADEUS_ENVIRONMENT
+        value: production
+      - key: FLIGHT_API_ACCESS_TOKEN
+        generateValue: true

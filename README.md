@@ -1,21 +1,49 @@
-# Flight Tickets Price Tracker
+# Live Flight Price Tracker
 
-A lightweight native Android application for exploring flight-search and price-alert workflows. Version `1.1.1-beta` supports trip dates, airport suggestions, multiple locally saved alerts, target evaluation, and an installable APK built by GitHub Actions.
+A native Android flight-price tracker that queries a real flight-offers provider. Version `2.0.0-beta` removes the offline simulator completely. The app does not generate prices, invent airline names, or fabricate itineraries.
 
-> **Important:** the current fare engine is an offline simulator. It generates deterministic sample prices on the device and does not query airlines, travel agencies, or live inventory. Do not use demo prices to make purchasing decisions.
+## What changed in 2.0
 
-## What works
+- Real Amadeus Flight Offers Search integration.
+- Real carrier names from the provider carrier dictionary.
+- Actual flight numbers, segments, departure and arrival times, stops, durations, baggage metadata, currencies, and total prices.
+- Secure Android Keystore storage for owner-entered provider credentials.
+- Production-safe backend mode that keeps provider credentials off the phone.
+- Saved target-price alerts checked through JobScheduler about every six hours when Android and network conditions permit.
+- Local provider-price history and notifications when a target is reached.
+- CI fails if the removed invented airlines or deterministic fare generator reappear.
 
-- Origin and destination entry with common-airport suggestions and strict IATA-code handling.
-- One-way or round-trip searches with departure and return dates.
-- Passenger count, cabin, and CAD or USD display selection.
-- Sorted deterministic demo fares with total prices, stops, and duration.
-- Multiple target-price alerts stored locally on the device.
-- Manual alert checks against the current demo engine.
-- Safe migration of the original single-alert storage format.
-- Unit tests, Android lint, pull-request CI, and installable debug APK artifacts.
+## No fake fallback
 
-## Build and test
+The app has no demo-price fallback. When configuration, authentication, networking, quota, or provider data fails, the app displays the real error. It never substitutes a generated fare.
+
+## Configure the Android app
+
+Open **Configure live provider** in the app and choose one mode.
+
+### Secure backend mode, recommended
+
+1. Deploy the service in [`server/`](server/README.md).
+2. Add the backend HTTPS URL.
+3. Add the backend access token if one was configured.
+
+The provider API key and secret stay on the server.
+
+### Amadeus API on this device, private use
+
+1. Create an Amadeus for Developers application.
+2. Enter the API key and secret in the app.
+3. Choose **Production live inventory** only after Amadeus has issued a production key.
+
+The app encrypts this configuration with Android Keystore. This mode is intended for the owner's private device, not public distribution. A public app should use the backend.
+
+## Test versus production
+
+The Amadeus test environment contains limited provider test data and is labeled as such in the app. It is not presented as live inventory. Production mode uses `https://api.amadeus.com` and requires a production key.
+
+Amadeus Self-Service Flight Offers Search also has coverage limitations. Its documentation states that low-cost carriers, American Airlines, Delta, and British Airways are unavailable through this API. The app reports only what the provider returns.
+
+## Build
 
 Requirements:
 
@@ -23,60 +51,29 @@ Requirements:
 - Android SDK 35
 - Android SDK Build Tools 36.0.0
 - Gradle 9.5.0
+- Python 3.13 for backend tests
 
 ```bash
+cd server
+pip install -r requirements-dev.txt
+pytest -q
+cd ..
+bash scripts/smoke_test.sh
 gradle --no-daemon --stacktrace test lint assembleDebug
 ```
 
-The installable beta APK is created at:
+APK output:
 
 ```text
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
-The release workflow intentionally publishes a debug-signed beta APK. A production release must use a protected signing key and a release signing configuration.
-
-## Continuous integration and releases
-
-- `.github/workflows/android-ci.yml` is the single CI workflow for pushes and pull requests.
-- `.github/workflows/android-release.yml` builds and publishes a prerelease when a matching `release/v*.md` file is added to `main`, or when manually dispatched.
-- The release contains the APK and a SHA-256 checksum file.
-- The Android Gradle Plugin is `9.3.0`, which requires Gradle `9.5.0` or newer.
+An optional repository variable named `FLIGHT_API_BASE_URL` can bake the default backend URL into CI builds. No provider secret or backend token is embedded.
 
 ## Architecture
 
-The app deliberately has no API secret embedded in the APK.
-
-- `AirportCatalog` resolves supported city names and explicit IATA codes.
-- `SearchCriteria` owns validation and normalized search inputs.
-- `FlightSearchEngine` provides deterministic offline demo quotes.
-- `PriceAlert` provides versioned alert serialization with legacy migration.
-- `AlertRepository` manages up to 25 local alerts in `SharedPreferences`.
-- `AlertEvaluator` compares saved targets with the best current demo quote.
-- `MainActivity` renders the native Android interface.
-
-More detail is available in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
-
-## Connecting live fares safely
-
-A live implementation should call a backend you control, not place an Amadeus, Sabre, Duffel, or airline API secret inside the Android app.
-
-1. Create a server endpoint that stores provider secrets securely.
-2. Validate and rate-limit incoming searches.
-3. Exchange provider credentials server-side and normalize results.
-4. Return only the fare data required by the app.
-5. Add caching, request timeouts, retry limits, and provider error mapping.
-6. Replace or wrap `FlightSearchEngine` with a network-backed provider while retaining demo mode as an explicit fallback.
-7. Schedule background checks only after notification permission, battery behavior, and provider rate limits are handled.
-
-## Current limitations
-
-- No live inventory or booking links.
-- No background notifications.
-- The airport catalog is intentionally small; direct three-letter IATA codes are accepted.
-- Alerts are local to one device and are not synchronized.
-- Demo totals are generated for product testing, not market-price analysis.
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Security
 
-Never commit API keys, provider secrets, signing keystores, passwords, or production endpoints containing credentials. See [`SECURITY.md`](SECURITY.md).
+Never commit Amadeus credentials, backend access tokens, signing keystores, or production secrets. See [`SECURITY.md`](SECURITY.md).

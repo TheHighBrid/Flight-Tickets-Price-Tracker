@@ -1,5 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:allowBackup="false"
@@ -8,6 +11,11 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme"
         android:usesCleartextTraffic="false">
+        <service
+            android:name=".AlertCheckJobService"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true">

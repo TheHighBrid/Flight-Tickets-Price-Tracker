@@ -14,32 +14,12 @@ public final class AirportCatalog {
     private static final Map<String, String> ALIASES;
 
     private static final String[] SUGGESTIONS = {
-            "Ottawa (YOW)",
-            "Montreal Trudeau (YUL)",
-            "Toronto Pearson (YYZ)",
-            "Vancouver (YVR)",
-            "Calgary (YYC)",
-            "Edmonton (YEG)",
-            "Halifax (YHZ)",
-            "Winnipeg (YWG)",
-            "Quebec City (YQB)",
-            "New York JFK (JFK)",
-            "New York LaGuardia (LGA)",
-            "Newark (EWR)",
-            "Los Angeles (LAX)",
-            "San Francisco (SFO)",
-            "Miami (MIA)",
-            "Chicago O'Hare (ORD)",
-            "London Heathrow (LHR)",
-            "Paris Charles de Gaulle (CDG)",
-            "Casablanca (CMN)",
-            "Marrakech (RAK)",
-            "Rabat (RBA)",
-            "Dubai (DXB)",
-            "Istanbul (IST)",
-            "Madrid (MAD)",
-            "Barcelona (BCN)",
-            "Lisbon (LIS)"
+            "Ottawa (YOW)", "Montreal Trudeau (YUL)", "Toronto Pearson (YYZ)", "Vancouver (YVR)",
+            "Calgary (YYC)", "Edmonton (YEG)", "Halifax (YHZ)", "Winnipeg (YWG)", "Quebec City (YQB)",
+            "New York JFK (JFK)", "New York LaGuardia (LGA)", "Newark (EWR)", "Los Angeles (LAX)",
+            "San Francisco (SFO)", "Miami (MIA)", "Chicago O'Hare (ORD)", "London Heathrow (LHR)",
+            "Paris Charles de Gaulle (CDG)", "Casablanca (CMN)", "Marrakech (RAK)", "Rabat (RBA)",
+            "Dubai (DXB)", "Istanbul (IST)", "Madrid (MAD)", "Barcelona (BCN)", "Lisbon (LIS)"
     };
 
     static {
@@ -79,16 +59,12 @@ public final class AirportCatalog {
         if (value == null) return null;
         String trimmed = value.trim();
         if (trimmed.isEmpty()) return null;
-
         String upper = trimmed.toUpperCase(Locale.CANADA);
         if (upper.matches("[A-Z]{3}")) return upper;
-
         Matcher parenthesized = PARENTHESIZED_CODE.matcher(upper);
         if (parenthesized.matches()) return parenthesized.group(1);
-
         Matcher leading = LEADING_CODE.matcher(upper);
         if (leading.matches()) return leading.group(1);
-
         return ALIASES.get(normalizeAlias(trimmed));
     }
 

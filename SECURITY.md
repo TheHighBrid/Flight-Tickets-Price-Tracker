@@ -1,21 +1,25 @@
 # Security policy
 
-## Sensitive material
+## Secrets
 
-Do not commit or embed any of the following:
+Do not commit or paste any of the following into the repository:
 
-- Flight-provider API keys or client secrets
+- Amadeus API keys or secrets
+- backend access tokens
 - Android signing keystores or passwords
-- Private backend credentials
-- User access tokens
-- Production database connection strings
+- production database credentials
+- cloud deployment credentials
 
-Mobile applications can be inspected and decompiled. Provider authentication must happen on a backend service controlled by the project.
+Amadeus automatically revokes API credentials that become publicly searchable. Backend credentials must be stored as deployment environment variables or secret-manager values.
 
-## Reporting a vulnerability
+## Android direct mode
 
-Open a private GitHub security advisory for the repository when available. Avoid placing exploitable details, credentials, or personal data in a public issue.
+Direct mode encrypts credentials with Android Keystore and AES-GCM. It is intended for a privately controlled device. It cannot provide the same secret isolation as a server because a compromised or rooted device can expose application data.
 
-## Current data handling
+## Backend mode
 
-Version `1.1.0-beta` stores search alerts locally in Android `SharedPreferences`. Android backup is disabled in the manifest. The app does not collect accounts, payment information, or live booking data.
+Use HTTPS only. Set `FLIGHT_API_ACCESS_TOKEN` to a long random value and enter the same value in the Android configuration. Apply rate limiting at the hosting edge before broad distribution.
+
+## Reporting
+
+Open a private security advisory for vulnerabilities that could expose credentials, tokens, personal data, or paid API usage.
