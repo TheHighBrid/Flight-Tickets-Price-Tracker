@@ -7,7 +7,7 @@
 - Added actual carrier names, flight numbers, itinerary segments, times, stops, durations, baggage, currencies, and provider timestamps.
 - Added secure Android Keystore configuration storage.
 - Added a production-safe FastAPI proxy backend with optional application-token protection.
-- Added real saved-fare checks, provider-price history, WorkManager scheduling, and target notifications.
+- Added real saved-fare checks, provider-price history, native Android JobScheduler checks, and target notifications.
 - Added explicit test-versus-production labeling.
 - Added CI enforcement that rejects the former fake carrier names and simulator logic.
 - Added backend tests, Android tests, lint, APK compilation, and release checks.
