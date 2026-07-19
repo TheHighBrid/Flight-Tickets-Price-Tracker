@@ -26,11 +26,11 @@ Direct mode is a private-device convenience. A public deployment must use the ba
 
 - `AlertRepository` stores up to 25 search targets.
 - `PriceHistoryRepository` stores the latest 30 provider observations per alert.
-- `AlertCheckWorker` performs connected-network checks through WorkManager.
-- `AlertScheduler` schedules unique periodic work every six hours.
+- `AlertCheckJobService` performs connected-network checks through Android JobScheduler.
+- `AlertScheduler` schedules a persisted periodic job every six hours.
 - `NotificationHelper` posts a notification only when a provider price is at or below the saved target.
 
-Android may delay periodic work because of battery optimization and Doze. Checks are reliable background work, not exact alarms.
+Android may delay periodic jobs because of battery optimization and Doze. Checks are reliable background work, not exact alarms.
 
 ## Backend
 
