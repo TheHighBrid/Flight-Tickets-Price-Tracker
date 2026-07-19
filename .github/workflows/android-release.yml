@@ -1,42 +1,101 @@
 name: Android Beta Release
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'release/v*.md'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      contents: write
+  build-and-release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-java@v4
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
-      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android SDK packages
+        run: sdkmanager "platforms;android-35" "build-tools;36.0.0"
+
+      - name: Set up Gradle 9.5
+        uses: gradle/actions/setup-gradle@v6
         with:
-          gradle-version: '8.9'
-      - name: Test, lint, and build
-        run: gradle --no-daemon test lint assembleDebug
-      - name: Prepare beta APK
+          gradle-version: '9.5.0'
+
+      - name: Resolve release metadata
+        id: release_meta
+        shell: bash
         run: |
+          set -euo pipefail
+          version="$(sed -n "s/^[[:space:]]*versionName[[:space:]]*'\([^']*\)'.*/\1/p" app/build.gradle | head -n 1)"
+          if [[ -z "$version" ]]; then
+            echo "Unable to read versionName from app/build.gradle" >&2
+            exit 1
+          fi
+          tag="v${version}"
+          notes="release/${tag}.md"
+          if [[ ! -f "$notes" ]]; then
+            echo "Missing release notes: $notes" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "notes=$notes" >> "$GITHUB_OUTPUT"
+
+      - name: Run core smoke test
+        run: bash scripts/smoke_test.sh
+
+      - name: Test, lint, and build APK
+        run: gradle --no-daemon --stacktrace test lint assembleDebug
+
+      - name: Prepare APK and checksum
+        shell: bash
+        run: |
+          set -euo pipefail
           mkdir -p dist
-          cp app/build/outputs/apk/debug/app-debug.apk dist/flight-tickets-price-tracker-${GITHUB_REF_NAME}.apk
-      - name: Upload beta APK
+          output="dist/flight-tickets-price-tracker-${{ steps.release_meta.outputs.tag }}.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "$output"
+          sha256sum "$output" > "${output}.sha256"
+
+      - name: Upload workflow artifact
         uses: actions/upload-artifact@v7
         with:
-          name: flight-tickets-price-tracker-${{ github.ref_name }}-apk
-          path: dist/*.apk
+          name: flight-tickets-price-tracker-${{ steps.release_meta.outputs.tag }}-apk
+          path: |
+            dist/*.apk
+            dist/*.sha256
           if-no-files-found: error
-      - name: Publish GitHub release
-        if: startsWith(github.ref, 'refs/tags/')
+          retention-days: 90
+
+      - name: Publish GitHub prerelease
         uses: softprops/action-gh-release@v3
         with:
-          files: dist/*.apk
-          generate_release_notes: true
+          tag_name: ${{ steps.release_meta.outputs.tag }}
+          name: Flight Tickets Price Tracker ${{ steps.release_meta.outputs.tag }}
+          body_path: ${{ steps.release_meta.outputs.notes }}
+          prerelease: true
+          make_latest: false
+          fail_on_unmatched_files: true
+          files: |
+            dist/*.apk
+            dist/*.sha256
