@@ -1,3 +1,4 @@
 <resources>
-    <string name="app_name">Live Flight Price Tracker</string>
+    <string name="app_name">Flight Tracker</string>
+    <string name="app_tagline">Live. Accurate. Global.</string>
 </resources>
