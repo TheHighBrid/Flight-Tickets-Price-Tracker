@@ -14,8 +14,8 @@ android {
         applicationId 'com.flightticketspricetracker'
         minSdk 23
         targetSdk 35
-        versionCode 4
-        versionName '2.0.0-beta'
+        versionCode 5
+        versionName '2.00'
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
         buildConfigField 'String', 'DEFAULT_BACKEND_URL', "\"${configuredBackendUrl}\""
     }
