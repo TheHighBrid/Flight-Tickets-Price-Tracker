@@ -1,4 +1,4 @@
-name: Live Flight Tracker Release
+name: FllightTicketsPriceTracker Release
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: live-flight-release-${{ github.ref }}
+  group: flight-tickets-release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -105,28 +105,28 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          output="dist/live-flight-price-tracker-${{ steps.release_meta.outputs.tag }}.apk"
+          output="dist/FllightTicketsPriceTracker-${{ steps.release_meta.outputs.tag }}.apk"
           cp app/build/outputs/apk/debug/app-debug.apk "$output"
           sha256sum "$output" > "${output}.sha256"
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v7
         with:
-          name: live-flight-price-tracker-${{ steps.release_meta.outputs.tag }}
+          name: FllightTicketsPriceTracker-${{ steps.release_meta.outputs.tag }}
           path: |
             dist/*.apk
             dist/*.sha256
           if-no-files-found: error
           retention-days: 90
 
-      - name: Publish GitHub prerelease
+      - name: Publish GitHub release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.release_meta.outputs.tag }}
-          name: Live Flight Price Tracker ${{ steps.release_meta.outputs.tag }}
+          name: FllightTicketsPriceTracker ${{ steps.release_meta.outputs.tag }}
           body_path: ${{ steps.release_meta.outputs.notes }}
-          prerelease: true
-          make_latest: false
+          prerelease: false
+          make_latest: true
           fail_on_unmatched_files: true
           files: |
             dist/*.apk
