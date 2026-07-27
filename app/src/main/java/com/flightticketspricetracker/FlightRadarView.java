@@ -43,7 +43,9 @@ public final class FlightRadarView extends View {
         float radius = dp(22);
         RectF bounds = new RectF(0, 0, width, height);
         canvas.save();
-        canvas.clipRoundRect(bounds, radius, radius);
+        Path clipPath = new Path();
+        clipPath.addRoundRect(bounds, radius, radius, Path.Direction.CW);
+        canvas.clipPath(clipPath);
 
         paint.setStyle(Paint.Style.FILL);
         paint.setShader(new LinearGradient(
