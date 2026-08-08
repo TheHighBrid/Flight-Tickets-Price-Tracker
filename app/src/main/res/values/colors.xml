@@ -1,5 +1,23 @@
 <resources>
-    <color name="brand">#176B87</color>
-    <color name="brand_dark">#0B2E3A</color>
-    <color name="background">#FFFFFF</color>
+    <color name="navy">#0A1B33</color>
+    <color name="navy_2">#09264F</color>
+    <color name="deep_blue">#123A6D</color>
+    <color name="royal_blue">#1E63F5</color>
+    <color name="accent_cyan">#00B8FF</color>
+    <color name="accent_aqua">#7EE6FF</color>
+    <color name="ice">#E6F2FF</color>
+    <color name="surface">#0D2648</color>
+    <color name="surface_2">#10315B</color>
+    <color name="border_blue">#2D5B91</color>
+    <color name="text_primary">#F6FAFF</color>
+    <color name="text_muted">#A6C3E2</color>
+    <color name="success">#20C978</color>
+    <color name="warning">#FFB44A</color>
+    <color name="error">#FF5D67</color>
+    <color name="boarding">#A36FFF</color>
+    <color name="white">#FFFFFF</color>
+
+    <color name="brand">#1E63F5</color>
+    <color name="brand_dark">#0A1B33</color>
+    <color name="background">#0A1B33</color>
 </resources>
