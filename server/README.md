@@ -23,6 +23,11 @@ Required secrets:
 
 The Android app sends `FLIGHT_API_ACCESS_TOKEN` as `X-App-Token` when configured.
 
+`HTTP_TIMEOUT_SECONDS` is optional and defaults to 30 seconds. Values are clamped
+to 1–120 seconds so a deployment typo cannot disable provider timeouts. Search
+requests reject invalid calendar dates, past departures, and returns before the
+departure before contacting the provider.
+
 ## Production truthfulness
 
 The Amadeus test environment contains limited provider test data. Only an Amadeus production key with `AMADEUS_ENVIRONMENT=production` should be presented to users as live inventory.

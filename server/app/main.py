@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 import os
 import time
 from dataclasses import dataclass
+from datetime import date
 from typing import Any
 
 import httpx
@@ -24,12 +26,19 @@ class Settings:
         environment = os.getenv("AMADEUS_ENVIRONMENT", "test").strip().lower()
         if environment not in {"test", "production"}:
             environment = "test"
+        try:
+            timeout_seconds = float(os.getenv("HTTP_TIMEOUT_SECONDS", "30"))
+        except ValueError:
+            timeout_seconds = 30.0
+        # Avoid a bad deployment value disabling timeouts or making requests
+        # appear to hang indefinitely.
+        timeout_seconds = min(max(timeout_seconds, 1.0), 120.0)
         return cls(
             client_id=os.getenv("AMADEUS_CLIENT_ID", "").strip(),
             client_secret=os.getenv("AMADEUS_CLIENT_SECRET", "").strip(),
             environment=environment,
             app_token=os.getenv("FLIGHT_API_ACCESS_TOKEN", "").strip(),
-            timeout_seconds=float(os.getenv("HTTP_TIMEOUT_SECONDS", "30")),
+            timeout_seconds=timeout_seconds,
         )
 
     @property
@@ -126,8 +135,21 @@ app = FastAPI(
 
 
 async def authorize(x_app_token: str | None = Header(default=None)) -> None:
-    if settings.app_token and x_app_token != settings.app_token:
+    if settings.app_token and (
+        x_app_token is None or not hmac.compare_digest(x_app_token, settings.app_token)
+    ):
         raise HTTPException(status_code=401, detail="Invalid backend access token.")
+
+
+def parse_travel_date(value: str, field_name: str) -> date:
+    """Parse an ISO travel date and return a useful client error."""
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exception:
+        raise HTTPException(
+            status_code=422,
+            detail=f"{field_name} must be a valid calendar date in YYYY-MM-DD format.",
+        ) from exception
 
 
 @app.exception_handler(httpx.RequestError)
@@ -160,6 +182,13 @@ async def search_flights(
 ) -> dict[str, Any]:
     if origin.upper() == destination.upper():
         raise HTTPException(status_code=400, detail="Origin and destination must be different.")
+    departure = parse_travel_date(departure_date, "departure_date")
+    if departure < date.today():
+        raise HTTPException(status_code=400, detail="departure_date cannot be in the past.")
+    if return_date:
+        returning = parse_travel_date(return_date, "return_date")
+        if returning < departure:
+            raise HTTPException(status_code=400, detail="return_date cannot be before departure_date.")
     params = {
         "originLocationCode": origin.upper(),
         "destinationLocationCode": destination.upper(),
