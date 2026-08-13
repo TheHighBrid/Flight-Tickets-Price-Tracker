@@ -1,0 +1,129 @@
+name: Free Fare Monitor
+
+on:
+  schedule:
+    - cron: "17 */8 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: free-fare-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: server/requirements.txt
+
+      - name: Install monitor dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r server/requirements.txt
+
+      - name: Restore and retain rolling monitor state
+        uses: actions/cache@v5
+        with:
+          path: .fare-monitor/state.json
+          key: fare-monitor-state-${{ github.run_id }}
+          restore-keys: |
+            fare-monitor-state-
+
+      - name: Scan private watchlist
+        id: scan
+        shell: bash
+        env:
+          AMADEUS_CLIENT_ID: ${{ secrets.AMADEUS_CLIENT_ID }}
+          AMADEUS_CLIENT_SECRET: ${{ secrets.AMADEUS_CLIENT_SECRET }}
+          AMADEUS_ENVIRONMENT: production
+          FLIGHT_WATCHLIST_JSON: ${{ secrets.FLIGHT_WATCHLIST_JSON }}
+          FLIGHT_MONITOR_MONTHLY_CALL_CAP: ${{ vars.FLIGHT_MONITOR_MONTHLY_CALL_CAP || '100' }}
+          FLIGHT_MONITOR_MAX_CALLS_PER_RUN: ${{ vars.FLIGHT_MONITOR_MAX_CALLS_PER_RUN || '4' }}
+        run: |
+          set -euo pipefail
+          mkdir -p .fare-monitor
+          set +e
+          PYTHONPATH=server python -m app.fare_monitor \
+            --state .fare-monitor/state.json \
+            --output .fare-monitor/result.json \
+            --markdown .fare-monitor/private-alert.md
+          status=$?
+          set -e
+
+          if [ -f .fare-monitor/result.json ]; then
+            alert_count="$(python -c 'import json; print(json.load(open(".fare-monitor/result.json"))["alert_count"])')"
+            echo "alert_count=$alert_count" >> "$GITHUB_OUTPUT"
+          else
+            echo "alert_count=0" >> "$GITHUB_OUTPUT"
+          fi
+
+          exit "$status"
+
+      - name: Create privacy-safe GitHub notification
+        if: always() && steps.scan.outputs.alert_count != '0'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          result = json.loads(Path('.fare-monitor/result.json').read_text(encoding='utf-8'))
+          lines = [
+              '# Flight fare alert',
+              '',
+              'One or more private watches matched. Route and date details are intentionally omitted from this public issue.',
+              '',
+          ]
+          for alert in result['alerts']:
+              reasons = ', '.join(alert.get('reasons') or [])
+              lines.append(f"- **{alert['watch_id']}**: {alert['price']:.2f} {alert['currency']} | {reasons}")
+          lines.extend([
+              '',
+              'Open the Flight Tracker app and refresh the matching watch to verify current inventory before purchasing.',
+          ])
+          Path('.fare-monitor/public-alert.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          PY
+
+          gh issue create \
+            --title "Flight fare alert: ${{ steps.scan.outputs.alert_count }} watch(es) matched" \
+            --body-file .fare-monitor/public-alert.md
+
+      - name: Publish privacy-safe run summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Free Fare Monitor"
+            if [ -f .fare-monitor/result.json ]; then
+              python - <<'PY'
+          import json
+          with open('.fare-monitor/result.json', encoding='utf-8') as handle:
+              result = json.load(handle)
+          print(f"- Provider calls this run: {result['provider_calls_this_run']}")
+          print(f"- Provider calls this month: {result['provider_calls_this_month']} / {result['monthly_call_cap']}")
+          print(f"- Observations: {result['observation_count']}")
+          print(f"- Alerts: {result['alert_count']}")
+          print(f"- Provider errors: {len(result['errors'])}")
+          print(f"- Quota guard engaged: {str(result['skipped_for_quota']).lower()}")
+          PY
+            else
+              echo "- Monitor did not produce a result file."
+            fi
+            echo
+            echo "Routes, dates, watch names and itineraries are intentionally omitted from the public Actions summary."
+          } >> "$GITHUB_STEP_SUMMARY"
