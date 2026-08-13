@@ -2,6 +2,7 @@
 build/
 app/build/
 .android-sdk/
+.fare-monitor/
 *.apk
 *.ap_
 local.properties
