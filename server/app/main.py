@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hmac
+import math
 import os
 import time
 from dataclasses import dataclass
@@ -32,6 +33,8 @@ class Settings:
             timeout_seconds = 30.0
         # Avoid a bad deployment value disabling timeouts or making requests
         # appear to hang indefinitely.
+        if not math.isfinite(timeout_seconds):
+            timeout_seconds = 30.0
         timeout_seconds = min(max(timeout_seconds, 1.0), 120.0)
         return cls(
             client_id=os.getenv("AMADEUS_CLIENT_ID", "").strip(),
@@ -83,12 +86,16 @@ class AmadeusProvider:
                 )
             if response.status_code >= 400:
                 raise provider_error(response)
-            payload = response.json()
+            payload = response_json(response, "authentication")
             token = payload.get("access_token")
             if not token:
                 raise HTTPException(status_code=502, detail="Provider authentication response did not include an access token.")
             self._token = token
-            self._token_expires_at = now + int(payload.get("expires_in", 1800))
+            try:
+                expires_in = int(payload.get("expires_in", 1800))
+            except (TypeError, ValueError):
+                expires_in = 1800
+            self._token_expires_at = now + max(expires_in, 1)
             return self._token
 
     async def search(self, params: dict[str, str]) -> dict[str, Any]:
@@ -99,7 +106,7 @@ class AmadeusProvider:
             response = await self._request_search(params, token)
         if response.status_code >= 400:
             raise provider_error(response)
-        return response.json()
+        return response_json(response, "flight search")
 
     async def _request_search(self, params: dict[str, str], token: str) -> httpx.Response:
         async with httpx.AsyncClient(timeout=self.settings.timeout_seconds) as client:
@@ -123,6 +130,23 @@ def provider_error(response: httpx.Response) -> HTTPException:
         pass
     status = response.status_code if response.status_code in {400, 401, 403, 404, 429} else 502
     return HTTPException(status_code=status, detail=detail)
+
+
+def response_json(response: httpx.Response, operation: str) -> dict[str, Any]:
+    """Decode an upstream object without exposing provider response bodies."""
+    try:
+        payload = response.json()
+    except ValueError as exception:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Provider {operation} response was not valid JSON.",
+        ) from exception
+    if not isinstance(payload, dict):
+        raise HTTPException(
+            status_code=502,
+            detail=f"Provider {operation} response had an unexpected format.",
+        )
+    return payload
 
 
 settings = Settings.from_env()
