@@ -25,6 +25,20 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Correct migration target after enum rename
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/migrate_to_serpapi.py')
+          text = path.read_text(encoding='utf-8')
+          old = '''                                : ProviderConfig.Mode.AMADEUS_DIRECT,\n                        environment.getSelectedItemPosition()'''
+          new = '''                                : ProviderConfig.Mode.SERPAPI_DIRECT,\n                        environment.getSelectedItemPosition()'''
+          if old not in text:
+              raise SystemExit('Expected migration target was not found')
+          path.write_text(text.replace(old, new), encoding='utf-8')
+          PY
+
       - name: Apply provider migration
         run: python scripts/migrate_to_serpapi.py
 
