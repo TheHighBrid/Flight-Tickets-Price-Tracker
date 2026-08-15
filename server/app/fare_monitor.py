@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import hashlib
 import json
+import math
 import os
 import statistics
 import time
@@ -35,6 +36,28 @@ def _positive_int(value: Any, field: str, default: int) -> int:
     parsed = int(value)
     if parsed < 1:
         raise ValueError(f"{field} must be at least 1.")
+    return parsed
+
+
+def _bounded_positive_int(value: Any, field: str, default: int, maximum: int) -> int:
+    parsed = _positive_int(value, field, default)
+    if parsed > maximum:
+        raise ValueError(f"{field} must be at most {maximum}.")
+    return parsed
+
+
+def _boolean(value: Any, field: str, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    raise ValueError(f"{field} must be true or false.")
+
+
+def _finite_float(value: Any, field: str) -> float:
+    parsed = float(value)
+    if not math.isfinite(parsed):
+        raise ValueError(f"{field} must be a finite number.")
     return parsed
 
 
@@ -124,11 +147,11 @@ class WatchRule:
             raise ValueError("max_stops cannot be negative.")
 
         target_raw = raw.get("target_price")
-        target_price = None if target_raw is None else float(target_raw)
+        target_price = None if target_raw is None else _finite_float(target_raw, "target_price")
         if target_price is not None and target_price <= 0:
             raise ValueError("target_price must be greater than zero.")
 
-        drop_percent = float(raw.get("drop_percent", 15.0))
+        drop_percent = _finite_float(raw.get("drop_percent", 15.0), "drop_percent")
         if not 0 <= drop_percent <= 90:
             raise ValueError("drop_percent must be between 0 and 90.")
 
@@ -143,9 +166,9 @@ class WatchRule:
             departure_end=departure_end,
             trip_lengths_days=trip_lengths,
             date_step_days=_positive_int(raw.get("date_step_days"), "date_step_days", 1),
-            adults=_positive_int(raw.get("adults"), "adults", 1),
+            adults=_bounded_positive_int(raw.get("adults"), "adults", 1, 9),
             travel_class=travel_class,
-            non_stop=bool(raw.get("non_stop", False)),
+            non_stop=_boolean(raw.get("non_stop"), "non_stop"),
             currency=currency,
             max_stops=max_stops,
             target_price=target_price,
@@ -215,16 +238,25 @@ def cheapest_quote(
     pair: SearchPair,
 ) -> Quote | None:
     candidates: list[Quote] = []
-    for offer in payload.get("data") or []:
+    offers = payload.get("data") or []
+    if not isinstance(offers, list):
+        return None
+    for offer in offers:
+        if not isinstance(offer, dict):
+            continue
         try:
             price_block = offer.get("price") or {}
             amount = float(price_block.get("grandTotal") or price_block.get("total"))
         except (TypeError, ValueError):
             continue
+        if not math.isfinite(amount) or amount <= 0:
+            continue
         stops = _offer_stops(offer)
         if watch.max_stops is not None and stops > watch.max_stops:
             continue
         currency = str((offer.get("price") or {}).get("currency") or watch.currency).upper()
+        if currency != watch.currency:
+            continue
         candidates.append(
             Quote(
                 price=amount,

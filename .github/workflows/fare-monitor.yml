@@ -34,7 +34,7 @@ jobs:
           pip install -r server/requirements.txt
 
       - name: Restore and retain rolling monitor state
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: .fare-monitor/state.json
           key: fare-monitor-state-${{ github.run_id }}

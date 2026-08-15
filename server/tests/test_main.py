@@ -1,8 +1,11 @@
 from datetime import date, timedelta
 
+import httpx
+import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from app.main import Settings, app
+from app.main import Settings, app, response_json
 
 
 def future_date(days: int = 30) -> str:
@@ -82,3 +85,13 @@ def test_settings_invalid_timeout_falls_back_and_values_are_bounded(monkeypatch)
     assert Settings.from_env().timeout_seconds == 1.0
     monkeypatch.setenv("HTTP_TIMEOUT_SECONDS", "999")
     assert Settings.from_env().timeout_seconds == 120.0
+    monkeypatch.setenv("HTTP_TIMEOUT_SECONDS", "nan")
+    assert Settings.from_env().timeout_seconds == 30.0
+
+
+@pytest.mark.parametrize("content", [b"not-json", b"[]"])
+def test_provider_json_rejects_malformed_or_non_object_payload(content):
+    response = httpx.Response(200, content=content)
+    with pytest.raises(HTTPException) as caught:
+        response_json(response, "flight search")
+    assert caught.value.status_code == 502
