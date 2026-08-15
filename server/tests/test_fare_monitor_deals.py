@@ -21,16 +21,23 @@ def test_cheapest_quote_respects_stop_limit():
     watch = make_watch()
     pair = watch.candidates()[0]
     payload = {
-        "data": [
+        "best_flights": [
             {
-                "id": "excluded",
-                "price": {"grandTotal": "500", "currency": "CAD"},
-                "itineraries": [{"segments": [{"carrierCode": "AC"}, {"carrierCode": "AT"}, {"carrierCode": "AT"}]}],
+                "departure_token": "excluded",
+                "price": 500,
+                "flights": [
+                    {"airline": "Air Canada"},
+                    {"airline": "Royal Air Maroc"},
+                    {"airline": "Royal Air Maroc"},
+                ],
             },
             {
-                "id": "accepted",
-                "price": {"grandTotal": "650", "currency": "CAD"},
-                "itineraries": [{"segments": [{"carrierCode": "AC"}, {"carrierCode": "AT"}]}],
+                "departure_token": "accepted",
+                "price": 650,
+                "flights": [
+                    {"airline": "Air Canada"},
+                    {"airline": "Royal Air Maroc"},
+                ],
             },
         ]
     }
@@ -39,15 +46,19 @@ def test_cheapest_quote_respects_stop_limit():
     assert quote.offer_id == "accepted"
     assert quote.price == 650
     assert quote.stops == 1
+    assert quote.currency == "CAD"
+    assert quote.carriers == ("Air Canada", "Royal Air Maroc")
 
 
-def test_cheapest_quote_rejects_invalid_prices_and_wrong_currency():
+def test_cheapest_quote_rejects_invalid_prices():
     watch = make_watch()
-    payload = {"data": [
-        {"id": "nan", "price": {"grandTotal": "NaN", "currency": "CAD"}},
-        {"id": "negative", "price": {"grandTotal": "-1", "currency": "CAD"}},
-        {"id": "wrong-currency", "price": {"grandTotal": "1", "currency": "USD"}},
-    ]}
+    payload = {
+        "other_flights": [
+            {"departure_token": "nan", "price": "NaN", "flights": [{"airline": "Air Canada"}]},
+            {"departure_token": "negative", "price": -1, "flights": [{"airline": "Air Canada"}]},
+            {"departure_token": "missing", "flights": [{"airline": "Air Canada"}]},
+        ]
+    }
     assert cheapest_quote(payload, watch, watch.candidates()[0]) is None
 
 
@@ -64,12 +75,12 @@ def test_target_alert_suppresses_duplicate_then_allows_better_fare():
         _state_key(watch.id),
         {"cursor": 0, "prices": [], "last_alert_price": None, "last_alert_at": 0},
     )
-    first_quote = Quote(650, "CAD", 1, ("AC",), "1", "2026-10-01", "2026-10-08")
+    first_quote = Quote(650, "CAD", 1, ("Air Canada",), "1", "2026-10-01", "2026-10-08")
     first = evaluate_deal(watch, first_quote, watch_state, 1_000_000)
     duplicate = evaluate_deal(watch, first_quote, watch_state, 1_000_100)
     better = evaluate_deal(
         watch,
-        Quote(620, "CAD", 1, ("AC",), "2", "2026-10-01", "2026-10-08"),
+        Quote(620, "CAD", 1, ("Air Canada",), "2", "2026-10-01", "2026-10-08"),
         watch_state,
         1_000_200,
     )
@@ -87,7 +98,7 @@ def test_rolling_median_can_trigger_unusual_drop():
     )
     result = evaluate_deal(
         watch,
-        Quote(800, "CAD", 0, ("AT",), "deal", "2026-10-01", "2026-10-08"),
+        Quote(800, "CAD", 0, ("Royal Air Maroc",), "deal", "2026-10-01", "2026-10-08"),
         watch_state,
         1_000_000,
     )
