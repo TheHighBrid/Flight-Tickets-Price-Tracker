@@ -6,11 +6,7 @@ services:
     dockerContext: ./server
     healthCheckPath: /health
     envVars:
-      - key: AMADEUS_CLIENT_ID
+      - key: SERPAPI_API_KEY
         sync: false
-      - key: AMADEUS_CLIENT_SECRET
-        sync: false
-      - key: AMADEUS_ENVIRONMENT
-        value: production
       - key: FLIGHT_API_ACCESS_TOKEN
         generateValue: true

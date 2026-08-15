@@ -16,7 +16,7 @@ def test_health_never_claims_simulated_fares():
     response = TestClient(app).get("/health")
     assert response.status_code == 200
     payload = response.json()
-    assert payload["provider"] == "Amadeus"
+    assert payload["provider"] == "Google Flights via SerpApi"
     assert payload["simulated_fares"] is False
 
 
@@ -43,7 +43,7 @@ def test_search_requires_provider_configuration():
         },
     )
     assert response.status_code == 503
-    assert "credentials" in response.json()["detail"].lower()
+    assert "serpapi_api_key" in response.json()["detail"].lower()
 
 
 def test_search_rejects_invalid_calendar_date_before_provider_call():

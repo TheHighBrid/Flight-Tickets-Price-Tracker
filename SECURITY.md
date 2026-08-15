@@ -1,25 +1,18 @@
-# Security policy
+# Security
 
-## Secrets
+## Provider credentials
 
-Do not commit or paste any of the following into the repository:
+The current provider is Google Flights via SerpApi.
 
-- Amadeus API keys or secrets
-- backend access tokens
-- Android signing keystores or passwords
-- production database credentials
-- cloud deployment credentials
+- Never commit `SERPAPI_API_KEY`.
+- For a private owner-only Android install, direct mode stores the key using Android Keystore.
+- For any distributed/public build, use secure backend mode and keep `SERPAPI_API_KEY` only in server environment variables.
+- Never log request URLs that contain a provider API key.
 
-Amadeus automatically revokes API credentials that become publicly searchable. Backend credentials must be stored as deployment environment variables or secret-manager values.
+## Backend
 
-## Android direct mode
+The optional backend accepts `FLIGHT_API_ACCESS_TOKEN` and sends it from the Android app as `X-App-Token`. Use a long random value and HTTPS only.
 
-Direct mode encrypts credentials with Android Keystore and AES-GCM. It is intended for a privately controlled device. It cannot provide the same secret isolation as a server because a compromised or rooted device can expose application data.
+## GitHub Actions
 
-## Backend mode
-
-Use HTTPS only. Set `FLIGHT_API_ACCESS_TOKEN` to a long random value and enter the same value in the Android configuration. Apply rate limiting at the hosting edge before broad distribution.
-
-## Reporting
-
-Open a private security advisory for vulnerabilities that could expose credentials, tokens, personal data, or paid API usage.
+Store `SERPAPI_API_KEY` and `FLIGHT_WATCHLIST_JSON` as encrypted repository secrets. Never place private routes, travel dates, or credentials in workflow source.

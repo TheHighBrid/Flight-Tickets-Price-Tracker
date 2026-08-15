@@ -11,8 +11,8 @@ The application may return provider data or an explicit error. It may never manu
 1. `MainActivity` validates route, dates, passengers, cabin, nonstop preference, and currency.
 2. `FlightServiceFactory` selects one real data source:
    - `BackendFlightService`, recommended for production.
-   - `AmadeusFlightService`, owner-only direct mode.
-3. `AmadeusResponseParser` maps the official response into `FareQuote` objects.
+   - `SerpApiFlightService`, owner-only direct mode.
+3. `SerpApiResponseParser` maps the official response into `FareQuote` objects.
 4. Carrier names come from `dictionaries.carriers`. When a name is absent, the real IATA carrier code is shown rather than an invented name.
 5. Results display provider environment and verification time.
 
@@ -36,7 +36,7 @@ Android may delay periodic jobs because of battery optimization and Doze. Checks
 
 The FastAPI service in `server/`:
 
-- obtains Amadeus OAuth client-credentials tokens;
+- obtains SerpApi OAuth client-credentials tokens;
 - caches tokens until shortly before expiration;
 - proxies Flight Offers Search;
 - retries once after a provider 401;
@@ -54,4 +54,4 @@ Environment variables:
 
 ## Provider limitations
 
-Amadeus test data is limited and is not treated as live. Production keys are required for complete production access. Flight Offers Search coverage is determined by Amadeus and does not include every airline.
+SerpApi test data is limited and is not treated as live. Production keys are required for complete production access. Flight Offers Search coverage is determined by SerpApi and does not include every airline.

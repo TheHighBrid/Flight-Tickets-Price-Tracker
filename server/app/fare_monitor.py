@@ -13,7 +13,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Protocol
 
-from app.main import AmadeusProvider, Settings
+from app.main import SerpApiProvider, Settings
 
 
 def _iata(value: Any, field: str) -> str:
@@ -216,20 +216,26 @@ class Quote:
 
 
 def _offer_stops(offer: dict[str, Any]) -> int:
-    itineraries = offer.get("itineraries") or []
-    if not itineraries:
-        return 0
-    return max(max(len(itinerary.get("segments") or []) - 1, 0) for itinerary in itineraries)
+    flights = offer.get("flights") or []
+    return max(len(flights) - 1, 0)
 
 
 def _offer_carriers(offer: dict[str, Any]) -> tuple[str, ...]:
     seen: list[str] = []
-    for itinerary in offer.get("itineraries") or []:
-        for segment in itinerary.get("segments") or []:
-            code = str(segment.get("carrierCode") or "").strip().upper()
-            if code and code not in seen:
-                seen.append(code)
+    for segment in offer.get("flights") or []:
+        name = str(segment.get("airline") or "").strip()
+        if name and name not in seen:
+            seen.append(name)
     return tuple(seen)
+
+
+def _serpapi_offers(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    offers: list[dict[str, Any]] = []
+    for key in ("best_flights", "other_flights"):
+        value = payload.get(key) or []
+        if isinstance(value, list):
+            offers.extend(item for item in value if isinstance(item, dict))
+    return offers
 
 
 def cheapest_quote(
@@ -238,15 +244,10 @@ def cheapest_quote(
     pair: SearchPair,
 ) -> Quote | None:
     candidates: list[Quote] = []
-    offers = payload.get("data") or []
-    if not isinstance(offers, list):
-        return None
+    offers = _serpapi_offers(payload)
     for offer in offers:
-        if not isinstance(offer, dict):
-            continue
         try:
-            price_block = offer.get("price") or {}
-            amount = float(price_block.get("grandTotal") or price_block.get("total"))
+            amount = float(offer.get("price"))
         except (TypeError, ValueError):
             continue
         if not math.isfinite(amount) or amount <= 0:
@@ -254,16 +255,14 @@ def cheapest_quote(
         stops = _offer_stops(offer)
         if watch.max_stops is not None and stops > watch.max_stops:
             continue
-        currency = str((offer.get("price") or {}).get("currency") or watch.currency).upper()
-        if currency != watch.currency:
-            continue
+        currency = watch.currency
         candidates.append(
             Quote(
                 price=amount,
                 currency=currency,
                 stops=stops,
                 carriers=_offer_carriers(offer),
-                offer_id=str(offer.get("id") or ""),
+                offer_id=str(offer.get("departure_token") or offer.get("booking_token") or ""),
                 departure_date=pair.departure_date,
                 return_date=pair.return_date,
             )
@@ -272,18 +271,23 @@ def cheapest_quote(
 
 
 def provider_params(watch: WatchRule, pair: SearchPair) -> dict[str, str]:
+    travel_class = {"ECONOMY": "1", "PREMIUM_ECONOMY": "2", "BUSINESS": "3", "FIRST": "4"}[watch.travel_class]
     params = {
-        "originLocationCode": watch.origin,
-        "destinationLocationCode": watch.destination,
-        "departureDate": pair.departure_date,
+        "departure_id": watch.origin,
+        "arrival_id": watch.destination,
+        "outbound_date": pair.departure_date,
+        "type": "1" if pair.return_date else "2",
         "adults": str(watch.adults),
-        "travelClass": watch.travel_class,
-        "nonStop": str(watch.non_stop).lower(),
-        "currencyCode": watch.currency,
-        "max": "50",
+        "travel_class": travel_class,
+        "currency": watch.currency,
+        "hl": "en",
+        "gl": "ca",
+        "sort_by": "2",
     }
+    if watch.non_stop:
+        params["stops"] = "1"
     if pair.return_date:
-        params["returnDate"] = pair.return_date
+        params["return_date"] = pair.return_date
     return params
 
 
@@ -568,12 +572,12 @@ async def _main_async(args: argparse.Namespace) -> int:
     state_path = Path(args.state)
     state = load_state(state_path)
 
-    monthly_call_cap = int(os.getenv("FLIGHT_MONITOR_MONTHLY_CALL_CAP", "100"))
+    monthly_call_cap = int(os.getenv("FLIGHT_MONITOR_MONTHLY_CALL_CAP", "200"))
     max_calls_per_run = int(os.getenv("FLIGHT_MONITOR_MAX_CALLS_PER_RUN", "4"))
     if monthly_call_cap < 1 or max_calls_per_run < 1:
         raise ValueError("Monitor call caps must be positive integers.")
 
-    provider = AmadeusProvider(Settings.from_env())
+    provider = SerpApiProvider(Settings.from_env())
     result = await run_monitor(
         provider,
         watches,

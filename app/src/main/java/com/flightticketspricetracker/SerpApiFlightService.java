@@ -1,18 +1,14 @@
 package com.flightticketspricetracker;
 
-import org.json.JSONException;
-import org.json.JSONObject;
-
 import java.io.IOException;
 import java.net.URLEncoder;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
-public final class BackendFlightService implements FlightService {
+public final class SerpApiFlightService implements FlightService {
+    private static final String ENDPOINT = "https://serpapi.com/search.json";
     private final ProviderConfig config;
 
-    public BackendFlightService(ProviderConfig config) {
+    public SerpApiFlightService(ProviderConfig config) {
         this.config = config;
     }
 
@@ -23,13 +19,11 @@ public final class BackendFlightService implements FlightService {
         String configError = config.validationError();
         if (configError != null) throw new FlightServiceException(configError, false);
 
-        Map<String, String> headers = new HashMap<>();
-        if (!config.backendToken.isEmpty()) headers.put("X-App-Token", config.backendToken);
         HttpTransport.Response response;
         try {
-            response = HttpTransport.get(config.backendUrl + "/api/v1/flights/search?" + query(criteria), headers);
+            response = HttpTransport.get(ENDPOINT + "?" + query(criteria), null);
         } catch (IOException exception) {
-            throw new FlightServiceException("Unable to reach the configured flight backend.", true, exception);
+            throw new FlightServiceException("Unable to reach SerpApi. Check the internet connection.", true, exception);
         }
         if (response.statusCode < 200 || response.statusCode >= 300) {
             throw new FlightServiceException(
@@ -37,27 +31,33 @@ public final class BackendFlightService implements FlightService {
                     response.statusCode == 429 || response.statusCode >= 500
             );
         }
-        try {
-            JSONObject envelope = new JSONObject(response.body);
-            String environment = envelope.optString("environment", "cache-enabled");
-            JSONObject payload = envelope.getJSONObject("payload");
-            return SerpApiResponseParser.parse(payload.toString(), criteria, environment);
-        } catch (JSONException exception) {
-            throw new FlightServiceException("The flight backend returned an unreadable response.", false, exception);
-        }
+        return SerpApiResponseParser.parse(response.body, criteria, "direct/cache-enabled");
     }
 
-    private static String query(SearchCriteria criteria) {
+    private String query(SearchCriteria criteria) {
         StringBuilder query = new StringBuilder();
-        add(query, "origin", criteria.origin);
-        add(query, "destination", criteria.destination);
-        add(query, "departure_date", criteria.departureDate);
+        add(query, "engine", "google_flights");
+        add(query, "departure_id", criteria.origin);
+        add(query, "arrival_id", criteria.destination);
+        add(query, "outbound_date", criteria.departureDate);
+        add(query, "type", criteria.roundTrip ? "1" : "2");
         if (criteria.roundTrip) add(query, "return_date", criteria.returnDate);
+        add(query, "travel_class", travelClass(criteria.travelClassCode()));
         add(query, "adults", Integer.toString(criteria.passengers));
-        add(query, "travel_class", criteria.travelClassCode());
-        add(query, "non_stop", Boolean.toString(criteria.nonStop));
+        if (criteria.nonStop) add(query, "stops", "1");
         add(query, "currency", criteria.currency);
+        add(query, "hl", "en");
+        add(query, "gl", "ca");
+        add(query, "sort_by", "2");
+        add(query, "api_key", config.apiKey);
         return query.toString();
+    }
+
+    private static String travelClass(String value) {
+        if ("PREMIUM_ECONOMY".equals(value)) return "2";
+        if ("BUSINESS".equals(value)) return "3";
+        if ("FIRST".equals(value)) return "4";
+        return "1";
     }
 
     private static void add(StringBuilder query, String key, String value) {

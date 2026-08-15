@@ -39,11 +39,11 @@ public class LiveModelTest {
         FareQuote quote = new FareQuote(
                 "1", "Air Canada", "AC123", "YOW → YUL", "YOW 08:00 → YUL 09:00", "",
                 0, 60, new BigDecimal("212.40"), "CAD", "1 checked bag",
-                "Amadeus", "production", 1000L
+                "Google Flights via SerpApi", "cache-enabled", 1000L
         );
         assertEquals("CAD $212.40", quote.priceLabel());
         assertTrue(quote.summary().contains("Air Canada"));
-        assertTrue(quote.summary().contains("Amadeus production"));
+        assertTrue(quote.summary().contains("Google Flights via SerpApi cache-enabled"));
     }
 
     @Test

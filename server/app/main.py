@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import hmac
 import math
 import os
@@ -16,116 +15,58 @@ from fastapi.responses import JSONResponse
 
 @dataclass(frozen=True)
 class Settings:
-    client_id: str
-    client_secret: str
-    environment: str
+    api_key: str
     app_token: str
     timeout_seconds: float
 
     @classmethod
     def from_env(cls) -> "Settings":
-        environment = os.getenv("AMADEUS_ENVIRONMENT", "test").strip().lower()
-        if environment not in {"test", "production"}:
-            environment = "test"
         try:
             timeout_seconds = float(os.getenv("HTTP_TIMEOUT_SECONDS", "30"))
         except ValueError:
             timeout_seconds = 30.0
-        # Avoid a bad deployment value disabling timeouts or making requests
-        # appear to hang indefinitely.
         if not math.isfinite(timeout_seconds):
             timeout_seconds = 30.0
         timeout_seconds = min(max(timeout_seconds, 1.0), 120.0)
         return cls(
-            client_id=os.getenv("AMADEUS_CLIENT_ID", "").strip(),
-            client_secret=os.getenv("AMADEUS_CLIENT_SECRET", "").strip(),
-            environment=environment,
+            api_key=os.getenv("SERPAPI_API_KEY", "").strip(),
             app_token=os.getenv("FLIGHT_API_ACCESS_TOKEN", "").strip(),
             timeout_seconds=timeout_seconds,
         )
 
     @property
     def configured(self) -> bool:
-        return bool(self.client_id and self.client_secret)
-
-    @property
-    def base_url(self) -> str:
-        return "https://api.amadeus.com" if self.environment == "production" else "https://test.api.amadeus.com"
+        return bool(self.api_key)
 
 
-class AmadeusProvider:
+class SerpApiProvider:
+    ENDPOINT = "https://serpapi.com/search.json"
+
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
-        self._token = ""
-        self._token_expires_at = 0.0
-        self._lock = asyncio.Lock()
-
-    async def _access_token(self, force: bool = False) -> str:
-        now = time.time()
-        if not force and self._token and now < self._token_expires_at - 60:
-            return self._token
-
-        async with self._lock:
-            now = time.time()
-            if not force and self._token and now < self._token_expires_at - 60:
-                return self._token
-            if not self.settings.configured:
-                raise HTTPException(
-                    status_code=503,
-                    detail="Live flight provider credentials are not configured on the backend.",
-                )
-            async with httpx.AsyncClient(timeout=self.settings.timeout_seconds) as client:
-                response = await client.post(
-                    f"{self.settings.base_url}/v1/security/oauth2/token",
-                    headers={"Content-Type": "application/x-www-form-urlencoded"},
-                    data={
-                        "grant_type": "client_credentials",
-                        "client_id": self.settings.client_id,
-                        "client_secret": self.settings.client_secret,
-                    },
-                )
-            if response.status_code >= 400:
-                raise provider_error(response)
-            payload = response_json(response, "authentication")
-            token = payload.get("access_token")
-            if not token:
-                raise HTTPException(status_code=502, detail="Provider authentication response did not include an access token.")
-            self._token = token
-            try:
-                expires_in = int(payload.get("expires_in", 1800))
-            except (TypeError, ValueError):
-                expires_in = 1800
-            self._token_expires_at = now + max(expires_in, 1)
-            return self._token
 
     async def search(self, params: dict[str, str]) -> dict[str, Any]:
-        token = await self._access_token()
-        response = await self._request_search(params, token)
-        if response.status_code == 401:
-            token = await self._access_token(force=True)
-            response = await self._request_search(params, token)
+        if not self.settings.configured:
+            raise HTTPException(status_code=503, detail="SERPAPI_API_KEY is not configured on the backend.")
+        request_params = dict(params)
+        request_params["engine"] = "google_flights"
+        request_params["api_key"] = self.settings.api_key
+        async with httpx.AsyncClient(timeout=self.settings.timeout_seconds) as client:
+            response = await client.get(self.ENDPOINT, params=request_params, headers={"Accept": "application/json"})
         if response.status_code >= 400:
             raise provider_error(response)
-        return response_json(response, "flight search")
-
-    async def _request_search(self, params: dict[str, str], token: str) -> httpx.Response:
-        async with httpx.AsyncClient(timeout=self.settings.timeout_seconds) as client:
-            return await client.get(
-                f"{self.settings.base_url}/v2/shopping/flight-offers",
-                headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
-                params=params,
-            )
+        payload = response_json(response, "flight search")
+        provider_message = payload.get("error")
+        if provider_message:
+            raise HTTPException(status_code=502, detail=str(provider_message))
+        return payload
 
 
 def provider_error(response: httpx.Response) -> HTTPException:
     detail = f"Flight provider returned HTTP {response.status_code}."
     try:
         payload = response.json()
-        errors = payload.get("errors") or []
-        if errors:
-            detail = errors[0].get("detail") or errors[0].get("title") or detail
-        else:
-            detail = payload.get("error_description") or payload.get("detail") or detail
+        detail = payload.get("error") or payload.get("detail") or detail
     except Exception:
         pass
     status = response.status_code if response.status_code in {400, 401, 403, 404, 429} else 502
@@ -133,47 +74,38 @@ def provider_error(response: httpx.Response) -> HTTPException:
 
 
 def response_json(response: httpx.Response, operation: str) -> dict[str, Any]:
-    """Decode an upstream object without exposing provider response bodies."""
     try:
         payload = response.json()
     except ValueError as exception:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Provider {operation} response was not valid JSON.",
-        ) from exception
+        raise HTTPException(status_code=502, detail=f"Provider {operation} response was not valid JSON.") from exception
     if not isinstance(payload, dict):
-        raise HTTPException(
-            status_code=502,
-            detail=f"Provider {operation} response had an unexpected format.",
-        )
+        raise HTTPException(status_code=502, detail=f"Provider {operation} response had an unexpected format.")
     return payload
 
 
 settings = Settings.from_env()
-provider = AmadeusProvider(settings)
+provider = SerpApiProvider(settings)
 app = FastAPI(
     title="Flight Tickets Price Tracker API",
-    version="2.0.0-beta",
-    description="Secure proxy for real Amadeus flight-offer inventory. No simulated fares are generated.",
+    version="2.1.0",
+    description="Secure proxy for Google Flights results via SerpApi. No simulated fares are generated.",
 )
 
 
 async def authorize(x_app_token: str | None = Header(default=None)) -> None:
-    if settings.app_token and (
-        x_app_token is None or not hmac.compare_digest(x_app_token, settings.app_token)
-    ):
+    if settings.app_token and (x_app_token is None or not hmac.compare_digest(x_app_token, settings.app_token)):
         raise HTTPException(status_code=401, detail="Invalid backend access token.")
 
 
 def parse_travel_date(value: str, field_name: str) -> date:
-    """Parse an ISO travel date and return a useful client error."""
     try:
         return date.fromisoformat(value)
     except ValueError as exception:
-        raise HTTPException(
-            status_code=422,
-            detail=f"{field_name} must be a valid calendar date in YYYY-MM-DD format.",
-        ) from exception
+        raise HTTPException(status_code=422, detail=f"{field_name} must be a valid calendar date in YYYY-MM-DD format.") from exception
+
+
+def travel_class_code(value: str) -> str:
+    return {"ECONOMY": "1", "PREMIUM_ECONOMY": "2", "BUSINESS": "3", "FIRST": "4"}[value]
 
 
 @app.exception_handler(httpx.RequestError)
@@ -185,9 +117,9 @@ async def handle_network_error(_, exception: httpx.RequestError) -> JSONResponse
 async def health() -> dict[str, Any]:
     return {
         "status": "ok",
-        "provider": "Amadeus",
-        "environment": settings.environment,
+        "provider": "Google Flights via SerpApi",
         "configured": settings.configured,
+        "cache_enabled": True,
         "simulated_fares": False,
     }
 
@@ -202,7 +134,6 @@ async def search_flights(
     travel_class: str = Query(default="ECONOMY", pattern="^(ECONOMY|PREMIUM_ECONOMY|BUSINESS|FIRST)$"),
     non_stop: bool = Query(default=False),
     currency: str = Query(default="CAD", pattern="^[A-Z]{3}$"),
-    max_offers: int = Query(default=20, ge=1, le=50),
 ) -> dict[str, Any]:
     if origin.upper() == destination.upper():
         raise HTTPException(status_code=400, detail="Origin and destination must be different.")
@@ -213,23 +144,28 @@ async def search_flights(
         returning = parse_travel_date(return_date, "return_date")
         if returning < departure:
             raise HTTPException(status_code=400, detail="return_date cannot be before departure_date.")
+
     params = {
-        "originLocationCode": origin.upper(),
-        "destinationLocationCode": destination.upper(),
-        "departureDate": departure_date,
+        "departure_id": origin.upper(),
+        "arrival_id": destination.upper(),
+        "outbound_date": departure_date,
+        "type": "1" if return_date else "2",
         "adults": str(adults),
-        "travelClass": travel_class,
-        "nonStop": str(non_stop).lower(),
-        "currencyCode": currency.upper(),
-        "max": str(max_offers),
+        "travel_class": travel_class_code(travel_class),
+        "currency": currency.upper(),
+        "hl": "en",
+        "gl": "ca",
+        "sort_by": "2",
     }
     if return_date:
-        params["returnDate"] = return_date
+        params["return_date"] = return_date
+    if non_stop:
+        params["stops"] = "1"
 
     payload = await provider.search(params)
     return {
-        "provider": "Amadeus",
-        "environment": settings.environment,
+        "provider": "Google Flights via SerpApi",
+        "environment": "cache-enabled",
         "fetched_at_epoch_ms": int(time.time() * 1000),
         "simulated_fares": False,
         "payload": payload,

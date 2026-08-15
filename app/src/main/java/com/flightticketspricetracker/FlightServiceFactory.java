@@ -5,6 +5,6 @@ public final class FlightServiceFactory {
 
     public static FlightService create(ProviderConfig config) {
         if (config.mode == ProviderConfig.Mode.BACKEND) return new BackendFlightService(config);
-        return new AmadeusFlightService(config);
+        return new SerpApiFlightService(config);
     }
 }

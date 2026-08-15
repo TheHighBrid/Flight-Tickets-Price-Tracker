@@ -4,7 +4,10 @@ import java.net.URLDecoder;
 import java.net.URLEncoder;
 
 public final class ProviderConfig {
-    public enum Mode { AMADEUS_DIRECT, BACKEND }
+    public enum Mode { SERPAPI_DIRECT, BACKEND }
+
+    // Kept in the serialized model so older installs can be invalidated safely.
+    // SerpApi itself does not have separate test/production hosts.
     public enum Environment { TEST, PRODUCTION }
 
     public final Mode mode;
@@ -22,21 +25,21 @@ public final class ProviderConfig {
             String backendUrl,
             String backendToken
     ) {
-        this.mode = mode == null ? Mode.AMADEUS_DIRECT : mode;
-        this.environment = environment == null ? Environment.TEST : environment;
+        this.mode = mode == null ? Mode.SERPAPI_DIRECT : mode;
+        this.environment = environment == null ? Environment.PRODUCTION : environment;
         this.apiKey = clean(apiKey);
-        this.apiSecret = clean(apiSecret);
+        this.apiSecret = ""; // SerpApi uses one API key only.
         this.backendUrl = trimSlash(clean(backendUrl));
         this.backendToken = clean(backendToken);
     }
 
     public static ProviderConfig empty(String defaultBackendUrl) {
-        return new ProviderConfig(Mode.BACKEND, Environment.PRODUCTION, "", "", defaultBackendUrl, "");
+        return new ProviderConfig(Mode.SERPAPI_DIRECT, Environment.PRODUCTION, "", "", defaultBackendUrl, "");
     }
 
     public boolean isConfigured() {
         if (mode == Mode.BACKEND) return backendUrl.startsWith("https://");
-        return !apiKey.isEmpty() && !apiSecret.isEmpty();
+        return !apiKey.isEmpty();
     }
 
     public String validationError() {
@@ -45,35 +48,34 @@ public final class ProviderConfig {
             if (!backendUrl.startsWith("https://")) return "The backend URL must use HTTPS.";
             return null;
         }
-        if (apiKey.isEmpty()) return "Enter the Amadeus API key.";
-        if (apiSecret.isEmpty()) return "Enter the Amadeus API secret.";
+        if (apiKey.isEmpty()) return "Enter your SerpApi API key.";
         return null;
     }
 
     public String environmentLabel() {
-        return environment == Environment.PRODUCTION ? "production" : "test";
+        return "cache-enabled";
     }
 
     public String statusLabel() {
-        if (!isConfigured()) return "NOT CONFIGURED • No searches will run";
+        if (!isConfigured()) return "NOT CONFIGURED • Add a free SerpApi key";
         if (mode == Mode.BACKEND) return "SECURE BACKEND • " + backendUrl;
-        if (environment == Environment.PRODUCTION) return "LIVE PRODUCTION INVENTORY • Amadeus";
-        return "AMADEUS TEST ENVIRONMENT • Limited provider test data, not live inventory";
+        return "GOOGLE FLIGHTS VIA SERPAPI • API key stored on this device";
     }
 
     public String encode() {
-        return String.join("|", "v1", mode.name(), environment.name(),
-                encoded(apiKey), encoded(apiSecret), encoded(backendUrl), encoded(backendToken));
+        return String.join("|", "v2", mode.name(), environment.name(),
+                encoded(apiKey), encoded(""), encoded(backendUrl), encoded(backendToken));
     }
 
     public static ProviderConfig decode(String raw, String defaultBackendUrl) {
         if (raw == null || raw.trim().isEmpty()) return empty(defaultBackendUrl);
         String[] parts = raw.split("\\|", -1);
-        if (parts.length != 7 || !"v1".equals(parts[0])) return empty(defaultBackendUrl);
+        // v1 contained Amadeus credentials. Do not silently reuse them with a different provider.
+        if (parts.length != 7 || !"v2".equals(parts[0])) return empty(defaultBackendUrl);
         try {
             return new ProviderConfig(
                     Mode.valueOf(parts[1]), Environment.valueOf(parts[2]),
-                    decoded(parts[3]), decoded(parts[4]), decoded(parts[5]), decoded(parts[6])
+                    decoded(parts[3]), "", decoded(parts[5]), decoded(parts[6])
             );
         } catch (RuntimeException ignored) {
             return empty(defaultBackendUrl);

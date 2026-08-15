@@ -380,9 +380,6 @@ public class MainActivity extends Activity {
         int color;
         if (!providerConfig.isConfigured()) {
             color = FlightTheme.ERROR;
-        } else if (providerConfig.mode == ProviderConfig.Mode.AMADEUS_DIRECT
-                && providerConfig.environment == ProviderConfig.Environment.TEST) {
-            color = FlightTheme.WARNING;
         } else {
             color = FlightTheme.SUCCESS;
         }
@@ -403,14 +400,9 @@ public class MainActivity extends Activity {
         form.setBackgroundColor(FlightTheme.NAVY);
 
         form.addView(fieldLabel("CONNECTION MODE"));
-        Spinner mode = spinner(new String[]{"Secure backend", "Amadeus API on this device"});
-        mode.setSelection(current.mode == ProviderConfig.Mode.BACKEND ? 0 : 1);
+        Spinner mode = spinner(new String[]{"SerpApi on this device", "Secure backend"});
+        mode.setSelection(current.mode == ProviderConfig.Mode.SERPAPI_DIRECT ? 0 : 1);
         form.addView(mode);
-
-        form.addView(fieldLabel("AMADEUS ENVIRONMENT"));
-        Spinner environment = spinner(new String[]{"Production live inventory", "Test environment"});
-        environment.setSelection(current.environment == ProviderConfig.Environment.PRODUCTION ? 0 : 1);
-        form.addView(environment);
 
         form.addView(fieldLabel("SECURE BACKEND URL"));
         EditText backendUrl = standardInput(current.backendUrl);
@@ -421,16 +413,12 @@ public class MainActivity extends Activity {
         EditText backendToken = passwordInput(current.backendToken);
         form.addView(backendToken);
 
-        form.addView(fieldLabel("AMADEUS API KEY"));
+        form.addView(fieldLabel("SERPAPI API KEY"));
         EditText apiKey = passwordInput(current.apiKey);
         form.addView(apiKey);
 
-        form.addView(fieldLabel("AMADEUS API SECRET"));
-        EditText apiSecret = passwordInput(current.apiSecret);
-        form.addView(apiSecret);
-
         TextView note = text(
-                "Secure backend mode is recommended. Device mode stores credentials with Android Keystore. Test data stays clearly labeled and is never presented as live pricing.",
+                "For private use, choose SerpApi on this device and paste one API key. The key is stored with Android Keystore. Secure backend mode remains available for distributed builds.",
                 12,
                 false,
                 FlightTheme.MUTED
@@ -453,13 +441,11 @@ public class MainActivity extends Activity {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
                 ProviderConfig config = new ProviderConfig(
                         mode.getSelectedItemPosition() == 0
-                                ? ProviderConfig.Mode.BACKEND
-                                : ProviderConfig.Mode.AMADEUS_DIRECT,
-                        environment.getSelectedItemPosition() == 0
-                                ? ProviderConfig.Environment.PRODUCTION
-                                : ProviderConfig.Environment.TEST,
+                                ? ProviderConfig.Mode.SERPAPI_DIRECT
+                                : ProviderConfig.Mode.BACKEND,
+                        ProviderConfig.Environment.PRODUCTION,
                         apiKey.getText().toString(),
-                        apiSecret.getText().toString(),
+                        "",
                         backendUrl.getText().toString(),
                         backendToken.getText().toString()
                 );
@@ -518,7 +504,7 @@ public class MainActivity extends Activity {
 
     private void renderQuotes(SearchCriteria criteria, List<FareQuote> quotes) {
         resultsContainer.removeAllViews();
-        String heading = providerConfig.mode == ProviderConfig.Mode.AMADEUS_DIRECT
+        String heading = providerConfig.mode == ProviderConfig.Mode.SERPAPI_DIRECT
                 && providerConfig.environment == ProviderConfig.Environment.TEST
                 ? "Provider test results"
                 : "Live provider results";

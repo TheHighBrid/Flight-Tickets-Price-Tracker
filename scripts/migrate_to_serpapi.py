@@ -440,7 +440,7 @@ replace_required(main,
 replace_required(main,
 '''                        mode.getSelectedItemPosition() == 0
                                 ? ProviderConfig.Mode.BACKEND
-                                : ProviderConfig.Mode.AMADEUS_DIRECT,
+                                : ProviderConfig.Mode.SERPAPI_DIRECT,
                         environment.getSelectedItemPosition() == 0
                                 ? ProviderConfig.Environment.PRODUCTION
                                 : ProviderConfig.Environment.TEST,
