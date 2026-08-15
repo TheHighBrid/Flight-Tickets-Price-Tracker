@@ -1,3 +1,5 @@
+import pytest
+
 from app.fare_monitor import Quote, WatchRule, _empty_state, _state_key, cheapest_quote, evaluate_deal
 
 
@@ -37,6 +39,22 @@ def test_cheapest_quote_respects_stop_limit():
     assert quote.offer_id == "accepted"
     assert quote.price == 650
     assert quote.stops == 1
+
+
+def test_cheapest_quote_rejects_invalid_prices_and_wrong_currency():
+    watch = make_watch()
+    payload = {"data": [
+        {"id": "nan", "price": {"grandTotal": "NaN", "currency": "CAD"}},
+        {"id": "negative", "price": {"grandTotal": "-1", "currency": "CAD"}},
+        {"id": "wrong-currency", "price": {"grandTotal": "1", "currency": "USD"}},
+    ]}
+    assert cheapest_quote(payload, watch, watch.candidates()[0]) is None
+
+
+@pytest.mark.parametrize("field,value", [("non_stop", "false"), ("target_price", "nan"), ("drop_percent", "inf")])
+def test_watch_rejects_ambiguous_or_non_finite_values(field, value):
+    with pytest.raises(ValueError):
+        make_watch(**{field: value})
 
 
 def test_target_alert_suppresses_duplicate_then_allows_better_fare():
