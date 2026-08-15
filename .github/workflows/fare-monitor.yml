@@ -45,11 +45,9 @@ jobs:
         id: scan
         shell: bash
         env:
-          AMADEUS_CLIENT_ID: ${{ secrets.AMADEUS_CLIENT_ID }}
-          AMADEUS_CLIENT_SECRET: ${{ secrets.AMADEUS_CLIENT_SECRET }}
-          AMADEUS_ENVIRONMENT: production
+          SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
           FLIGHT_WATCHLIST_JSON: ${{ secrets.FLIGHT_WATCHLIST_JSON }}
-          FLIGHT_MONITOR_MONTHLY_CALL_CAP: ${{ vars.FLIGHT_MONITOR_MONTHLY_CALL_CAP || '100' }}
+          FLIGHT_MONITOR_MONTHLY_CALL_CAP: ${{ vars.FLIGHT_MONITOR_MONTHLY_CALL_CAP || '200' }}
           FLIGHT_MONITOR_MAX_CALLS_PER_RUN: ${{ vars.FLIGHT_MONITOR_MAX_CALLS_PER_RUN || '4' }}
         run: |
           set -euo pipefail
