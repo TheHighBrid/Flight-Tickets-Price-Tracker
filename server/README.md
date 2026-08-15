@@ -1,6 +1,6 @@
 # Live flight backend
 
-This FastAPI service is the production-safe data path for the Android app. It keeps Amadeus credentials on the server and proxies the official Flight Offers Search endpoint. It never manufactures fares or airline names.
+This FastAPI service is the production-safe data path for the Android app. It keeps the SerpApi key on the server and proxies Google Flights results through SerpApi. It never manufactures fares or airline names.
 
 ## Run locally
 
@@ -14,20 +14,21 @@ cp .env.example .env
 uvicorn app.main:app --reload --port 8080
 ```
 
-Required secrets:
+Required configuration:
 
-- `AMADEUS_CLIENT_ID`
-- `AMADEUS_CLIENT_SECRET`
-- `AMADEUS_ENVIRONMENT`, either `test` or `production`
-- `FLIGHT_API_ACCESS_TOKEN`, recommended to protect the public endpoint
+- `SERPAPI_API_KEY`, your private SerpApi key
+- `FLIGHT_API_ACCESS_TOKEN`, recommended when exposing the backend publicly
+
+`HTTP_TIMEOUT_SECONDS` is optional and defaults to 30 seconds. Values are clamped to 1-120 seconds so a deployment typo cannot disable provider timeouts. Search requests reject invalid calendar dates, past departures, and returns before the departure before contacting the provider.
 
 The Android app sends `FLIGHT_API_ACCESS_TOKEN` as `X-App-Token` when configured.
 
-`HTTP_TIMEOUT_SECONDS` is optional and defaults to 30 seconds. Values are clamped
-to 1–120 seconds so a deployment typo cannot disable provider timeouts. Search
-requests reject invalid calendar dates, past departures, and returns before the
-departure before contacting the provider.
+## Which mode should I use?
 
-## Production truthfulness
+For an owner-only install on a private Android device, direct SerpApi mode is simpler and needs no backend deployment. The Android configuration store protects the provider key with Android Keystore.
 
-The Amadeus test environment contains limited provider test data. Only an Amadeus production key with `AMADEUS_ENVIRONMENT=production` should be presented to users as live inventory.
+For an APK that will be distributed to other people, use this backend instead of putting a shared provider key on end-user devices. Configure the app with the backend HTTPS URL and optional access token, while `SERPAPI_API_KEY` remains only in the server environment.
+
+## Provider and quota behavior
+
+The backend requests Google Flights results through SerpApi and returns provider errors as errors. It does not substitute synthetic data. SerpApi cache behavior remains enabled by default so identical searches may be served from the provider cache without forcing a fresh billable search.
