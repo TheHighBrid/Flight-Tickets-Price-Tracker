@@ -42,6 +42,9 @@ jobs:
       - name: Apply provider migration
         run: python scripts/migrate_to_serpapi.py
 
+      - name: Leave scheduled workflow for connector update
+        run: git checkout -- .github/workflows/fare-monitor.yml
+
       - name: Commit migration
         shell: bash
         run: |
