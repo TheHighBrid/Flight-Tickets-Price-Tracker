@@ -23,6 +23,10 @@
             android:exported="false" />
 
         <activity
+            android:name=".BrandedMainActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".SplashActivity"
             android:exported="true"
             android:screenOrientation="portrait"
