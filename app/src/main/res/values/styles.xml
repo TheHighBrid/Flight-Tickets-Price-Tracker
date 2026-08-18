@@ -12,6 +12,16 @@
         <item name="android:alertDialogTheme">@style/AppDialogTheme</item>
     </style>
 
+    <style name="SplashTheme" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:statusBarColor">@android:color/black</item>
+        <item name="android:navigationBarColor">@android:color/black</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
     <style name="AppDialogTheme" parent="android:style/Theme.Material.Dialog.Alert">
         <item name="android:fontFamily">sans-serif</item>
         <item name="android:colorAccent">@color/accent_cyan</item>
