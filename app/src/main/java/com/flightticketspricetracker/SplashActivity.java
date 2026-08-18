@@ -22,8 +22,10 @@ public final class SplashActivity extends Activity {
     private static final long INTRO_SIZE_BYTES = 74_591L;
 
     private static final int[] INTRO_PARTS = {
-            R.raw.app_intro_00,
-            R.raw.app_intro_01,
+            R.raw.app_intro_00a,
+            R.raw.app_intro_00b,
+            R.raw.app_intro_01a,
+            R.raw.app_intro_01b,
             R.raw.app_intro_02,
             R.raw.app_intro_03,
             R.raw.app_intro_04,
@@ -110,12 +112,12 @@ public final class SplashActivity extends Activity {
     }
 
     private File materializeIntroVideo() throws IOException {
-        File videoFile = new File(getCacheDir(), "app_intro_v1.mp4");
+        File videoFile = new File(getCacheDir(), "app_intro_v2.mp4");
         if (videoFile.isFile() && videoFile.length() == INTRO_SIZE_BYTES) {
             return videoFile;
         }
 
-        File temporaryFile = new File(getCacheDir(), "app_intro_v1.tmp");
+        File temporaryFile = new File(getCacheDir(), "app_intro_v2.tmp");
         if (temporaryFile.exists() && !temporaryFile.delete()) {
             throw new IOException("Unable to reset intro video cache");
         }
