@@ -170,7 +170,7 @@ public final class SplashActivity extends Activity {
         navigating = true;
         handler.removeCallbacksAndMessages(null);
 
-        Intent intent = new Intent(this, MainActivity.class);
+        Intent intent = new Intent(this, BrandedMainActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         startActivity(intent);
         overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
