@@ -12,8 +12,26 @@ import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.VideoView;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+
 public final class SplashActivity extends Activity {
     private static final long PLAYBACK_WATCHDOG_MS = 16_000L;
+    private static final long INTRO_SIZE_BYTES = 74_591L;
+
+    private static final int[] INTRO_PARTS = {
+            R.raw.app_intro_00,
+            R.raw.app_intro_01,
+            R.raw.app_intro_02,
+            R.raw.app_intro_03,
+            R.raw.app_intro_04,
+            R.raw.app_intro_05,
+            R.raw.app_intro_06,
+            R.raw.app_intro_07,
+            R.raw.app_intro_08
+    };
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private VideoView introVideo;
@@ -35,10 +53,14 @@ public final class SplashActivity extends Activity {
         ));
         setContentView(root);
 
-        Uri introUri = Uri.parse(
-                "android.resource://" + getPackageName() + "/" + R.raw.app_intro
-        );
-        introVideo.setVideoURI(introUri);
+        try {
+            File introFile = materializeIntroVideo();
+            introVideo.setVideoURI(Uri.fromFile(introFile));
+        } catch (IOException error) {
+            openMainApp();
+            return;
+        }
+
         introVideo.setOnPreparedListener(player -> {
             player.setLooping(false);
             player.setVolume(1f, 1f);
@@ -85,6 +107,47 @@ public final class SplashActivity extends Activity {
             introVideo.stopPlayback();
         }
         super.onDestroy();
+    }
+
+    private File materializeIntroVideo() throws IOException {
+        File videoFile = new File(getCacheDir(), "app_intro_v1.mp4");
+        if (videoFile.isFile() && videoFile.length() == INTRO_SIZE_BYTES) {
+            return videoFile;
+        }
+
+        File temporaryFile = new File(getCacheDir(), "app_intro_v1.tmp");
+        if (temporaryFile.exists() && !temporaryFile.delete()) {
+            throw new IOException("Unable to reset intro video cache");
+        }
+
+        try (FileOutputStream output = new FileOutputStream(temporaryFile, false)) {
+            byte[] buffer = new byte[8192];
+            for (int resourceId : INTRO_PARTS) {
+                try (InputStream input = getResources().openRawResource(resourceId)) {
+                    int bytesRead;
+                    while ((bytesRead = input.read(buffer)) != -1) {
+                        output.write(buffer, 0, bytesRead);
+                    }
+                }
+            }
+            output.getFD().sync();
+        }
+
+        if (temporaryFile.length() != INTRO_SIZE_BYTES) {
+            temporaryFile.delete();
+            throw new IOException("Unexpected intro video size");
+        }
+
+        if (videoFile.exists() && !videoFile.delete()) {
+            temporaryFile.delete();
+            throw new IOException("Unable to replace intro video cache");
+        }
+
+        if (!temporaryFile.renameTo(videoFile)) {
+            temporaryFile.delete();
+            throw new IOException("Unable to prepare intro video");
+        }
+        return videoFile;
     }
 
     private void showImmersiveUi() {
