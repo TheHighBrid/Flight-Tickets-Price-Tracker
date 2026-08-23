@@ -6,6 +6,9 @@ def configuredBackendUrl = (System.getenv('FLIGHT_API_BASE_URL') ?: '')
         .replace('\\', '\\\\')
         .replace('"', '\\"')
 
+def originalMainJavaDir = file('src/main/java')
+def generatedDarijaJavaDir = layout.buildDirectory.dir('generated/darija/main/java')
+
 android {
     namespace 'com.flightticketspricetracker'
     compileSdk 35
@@ -14,10 +17,14 @@ android {
         applicationId 'com.flightticketspricetracker'
         minSdk 23
         targetSdk 35
-        versionCode 6
-        versionName '2.01'
+        versionCode 7
+        versionName '2.02'
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
         buildConfigField 'String', 'DEFAULT_BACKEND_URL', "\"${configuredBackendUrl}\""
+    }
+
+    sourceSets {
+        main.java.srcDirs = [generatedDarijaJavaDir.get().asFile]
     }
 
     buildFeatures {
@@ -37,6 +44,57 @@ android {
     lint {
         abortOnError true
         checkReleaseBuilds true
+    }
+}
+
+def generateDarijaSources = tasks.register('generateDarijaSources') {
+    inputs.dir(originalMainJavaDir)
+    outputs.dir(generatedDarijaJavaDir)
+
+    doLast {
+        File outputDir = generatedDarijaJavaDir.get().asFile
+        delete(outputDir)
+        copy {
+            from originalMainJavaDir
+            into outputDir
+            include '**/*.java'
+        }
+
+        fileTree(outputDir).matching { include '**/*.java' }.each { File sourceFile ->
+            String source = sourceFile.getText('UTF-8')
+
+            source = source.replace('view.setText(value);', 'view.setText(Darija.text(value));')
+            source = source.replace('button.setText(label);', 'button.setText(Darija.text(label));')
+            source = source.replace('box.setText(label);', 'box.setText(Darija.text(label));')
+            source = source.replace('input.setHint(hint);', 'input.setHint(Darija.text(hint));')
+            source = source.replace('providerStatus.setText(providerConfig.statusLabel());', 'providerStatus.setText(Darija.text(providerConfig.statusLabel()));')
+            source = source.replace('textView.setTextColor(FlightTheme.TEXT);', 'textView.setText(Darija.text(textView.getText()));\n            textView.setTextColor(FlightTheme.TEXT);')
+            source = source.replace('targetPrice.setError("Enter a valid target amount.");', 'targetPrice.setError(Darija.text("Enter a valid target amount."));')
+            source = source.replace('Toast.makeText(this, message == null ? "Something went wrong." : message, Toast.LENGTH_LONG).show();', 'Toast.makeText(this, Darija.text(message == null ? "Something went wrong." : message), Toast.LENGTH_LONG).show();')
+
+            source = source.replace('.setTitle("Configure real flight data")', '.setTitle(Darija.text("Configure real flight data"))')
+            source = source.replace('.setTitle("Clear all alerts?")', '.setTitle(Darija.text("Clear all alerts?"))')
+            source = source.replace('.setMessage("This removes every alert and its recorded provider prices.")', '.setMessage(Darija.text("This removes every alert and its recorded provider prices."))')
+            source = source.replace('.setNegativeButton("Cancel", null)', '.setNegativeButton(Darija.text("Cancel"), null)')
+            source = source.replace('.setNeutralButton("Clear", null)', '.setNeutralButton(Darija.text("Clear"), null)')
+            source = source.replace('.setPositiveButton("Save", null)', '.setPositiveButton(Darija.text("Save"), null)')
+            source = source.replace('.setPositiveButton("Clear", (dialog, which) -> {', '.setPositiveButton(Darija.text("Clear"), (dialog, which) -> {')
+
+            source = source.replace('"Flight price alerts",', 'Darija.text("Flight price alerts"),')
+            source = source.replace('channel.setDescription("Notifications when a real provider fare reaches a saved target.");', 'channel.setDescription(Darija.text("Notifications when a real provider fare reaches a saved target."));')
+            source = source.replace('.setContentTitle("Flight target reached: " + alert.criteria.route())', '.setContentTitle(Darija.text("Flight target reached: " + alert.criteria.route()))')
+            source = source.replace('.setContentText(quote.priceLabel() + " with " + quote.airlineNames)', '.setContentText(Darija.text(quote.priceLabel() + " with " + quote.airlineNames))')
+            source = source.replace('.setStyle(new Notification.BigTextStyle().bigText(quote.summary()))', '.setStyle(new Notification.BigTextStyle().bigText(Darija.text(quote.summary())))')
+            source = source.replace('canvas.drawText("LIVE", left + dp(23), top + dp(18), paint);', 'canvas.drawText(Darija.text("LIVE"), left + dp(23), top + dp(18), paint);')
+
+            sourceFile.write(source, 'UTF-8')
+        }
+    }
+}
+
+tasks.configureEach { task ->
+    if (task.name == 'preBuild' || (task.name.startsWith('compile') && task.name.endsWith('JavaWithJavac'))) {
+        task.dependsOn(generateDarijaSources)
     }
 }
 
