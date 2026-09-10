@@ -169,7 +169,7 @@ public class MainActivity extends Activity {
         hero.addView(brandRow);
 
         radarView = new FlightRadarView(this);
-        radarView.setRouteLabels("YOW", "CMN");
+        radarView.setRouteLabels("YUL", "CMN");
         LinearLayout.LayoutParams radarParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 dp(190)
@@ -221,7 +221,7 @@ public class MainActivity extends Activity {
         providerStatus = text("", 12, true, FlightTheme.TEXT);
         providerStatus.setGravity(Gravity.CENTER_VERTICAL);
         providerStatus.setPadding(dp(12), dp(8), dp(12), dp(8));
-        providerStatus.setMaxLines(2);
+        providerStatus.setMaxLines(3);
         providerRow.addView(providerStatus, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         Button configure = secondaryButton("Configure");
         configure.setOnClickListener(view -> showProviderDialog());
@@ -231,7 +231,7 @@ public class MainActivity extends Activity {
         card.addView(providerRow);
 
         card.addView(fieldLabel("ORIGIN"));
-        origin = airportInput("Airport, city, or IATA code", "Ottawa (YOW)", R.drawable.ic_location);
+        origin = airportInput("Airport, city, or IATA code", "Montreal Trudeau (YUL)", R.drawable.ic_location);
         origin.setOnFocusChangeListener((view, focused) -> {
             if (!focused && radarView != null) radarView.setRouteLabels(origin.getText().toString(), destination == null ? "CMN" : destination.getText().toString());
         });
@@ -376,9 +376,18 @@ public class MainActivity extends Activity {
 
     private void updateProviderStatus() {
         providerConfig = configStore.load();
-        providerStatus.setText(providerConfig.statusLabel());
+        String status = providerConfig.statusLabel();
+        boolean poolExhausted = false;
+        if (providerConfig.mode == ProviderConfig.Mode.SERPAPI_DIRECT && providerConfig.isConfigured()) {
+            int activeIndex = configStore.currentSerpApiKeyIndex(providerConfig);
+            poolExhausted = activeIndex >= providerConfig.apiKeyCount();
+            status += poolExhausted
+                    ? " • ALL KEYS EXHAUSTED THIS MONTH"
+                    : " • ACTIVE KEY " + (activeIndex + 1) + "/" + providerConfig.apiKeyCount();
+        }
+        providerStatus.setText(status);
         int color;
-        if (!providerConfig.isConfigured()) {
+        if (!providerConfig.isConfigured() || poolExhausted) {
             color = FlightTheme.ERROR;
         } else {
             color = FlightTheme.SUCCESS;
@@ -413,12 +422,17 @@ public class MainActivity extends Activity {
         EditText backendToken = passwordInput(current.backendToken);
         form.addView(backendToken);
 
-        form.addView(fieldLabel("SERPAPI API KEY"));
-        EditText apiKey = passwordInput(current.apiKey);
-        form.addView(apiKey);
+        EditText[] apiKeyInputs = new EditText[ProviderConfig.MAX_SERPAPI_KEYS];
+        for (int index = 0; index < apiKeyInputs.length; index++) {
+            form.addView(fieldLabel("SERPAPI API KEY " + (index + 1) + (index == 0 ? "" : " (OPTIONAL)")));
+            EditText input = passwordInput(current.apiKeyAt(index));
+            input.setHint(index == 0 ? "Primary SerpApi key" : "Fallback key " + (index + 1));
+            apiKeyInputs[index] = input;
+            form.addView(input);
+        }
 
         TextView note = text(
-                "For private use, choose SerpApi on this device and paste one API key. The key is stored with Android Keystore. Secure backend mode remains available for distributed builds.",
+                "Add up to five SerpApi keys. The app starts with Key 1 and automatically advances when a key reaches its search quota or is rejected. The active slot is remembered for the month, then resets to Key 1 at the start of the next calendar month. All keys are protected with Android Keystore.",
                 12,
                 false,
                 FlightTheme.MUTED
@@ -439,12 +453,16 @@ public class MainActivity extends Activity {
             dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(FlightTheme.MUTED);
             dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setTextColor(FlightTheme.ERROR);
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
+                String[] apiKeys = new String[apiKeyInputs.length];
+                for (int index = 0; index < apiKeyInputs.length; index++) {
+                    apiKeys[index] = apiKeyInputs[index].getText().toString();
+                }
                 ProviderConfig config = new ProviderConfig(
                         mode.getSelectedItemPosition() == 0
                                 ? ProviderConfig.Mode.SERPAPI_DIRECT
                                 : ProviderConfig.Mode.BACKEND,
                         ProviderConfig.Environment.PRODUCTION,
-                        apiKey.getText().toString(),
+                        apiKeys,
                         "",
                         backendUrl.getText().toString(),
                         backendToken.getText().toString()
@@ -458,7 +476,7 @@ public class MainActivity extends Activity {
                 updateProviderStatus();
                 AlertScheduler.refresh(this);
                 dialog.dismiss();
-                showMessage("Provider configuration saved securely.");
+                showMessage("Provider configuration saved securely. SerpApi rotation starts from Key 1.");
             });
             dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(view -> {
                 configStore.clear();
@@ -488,14 +506,16 @@ public class MainActivity extends Activity {
         setBusy(true, "Searching provider inventory...");
         executor.submit(() -> {
             try {
-                List<FareQuote> quotes = FlightServiceFactory.create(providerConfig).search(criteria);
+                List<FareQuote> quotes = FlightServiceFactory.create(providerConfig, configStore).search(criteria);
                 runOnUiThread(() -> {
                     setBusy(false, null);
+                    updateProviderStatus();
                     renderQuotes(criteria, quotes);
                 });
             } catch (FlightServiceException exception) {
                 runOnUiThread(() -> {
                     setBusy(false, null);
+                    updateProviderStatus();
                     renderError(exception.getMessage());
                 });
             }
@@ -647,7 +667,7 @@ public class MainActivity extends Activity {
         }
         setBusy(true, "Checking saved alerts against provider inventory...");
         executor.submit(() -> {
-            FlightService service = FlightServiceFactory.create(providerConfig);
+            FlightService service = FlightServiceFactory.create(providerConfig, configStore);
             int checked = 0;
             int reached = 0;
             String lastError = null;
@@ -671,6 +691,7 @@ public class MainActivity extends Activity {
             String finalError = lastError;
             runOnUiThread(() -> {
                 setBusy(false, null);
+                updateProviderStatus();
                 renderAlerts();
                 if (finalChecked == 0 && finalError != null) {
                     showMessage(finalError);

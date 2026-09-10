@@ -8,5 +8,13 @@ services:
     envVars:
       - key: SERPAPI_API_KEY
         sync: false
+      - key: SERPAPI_API_KEY_2
+        sync: false
+      - key: SERPAPI_API_KEY_3
+        sync: false
+      - key: SERPAPI_API_KEY_4
+        sync: false
+      - key: SERPAPI_API_KEY_5
+        sync: false
       - key: FLIGHT_API_ACCESS_TOKEN
         generateValue: true
