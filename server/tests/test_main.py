@@ -1,4 +1,5 @@
 import asyncio
+import json
 from datetime import date, timedelta
 
 import httpx
@@ -144,6 +145,38 @@ def test_provider_remembers_all_keys_exhausted_in_instance(monkeypatch):
 
     with pytest.raises(HTTPException):
         asyncio.run(provider.search({"departure_id": "YUL", "arrival_id": "CMN"}))
+    assert calls == ["key-1", "key-2"]
+
+
+def test_provider_persists_only_active_slot_and_month(monkeypatch, tmp_path):
+    calls: list[str] = []
+    state_path = tmp_path / "serpapi-key-state.json"
+
+    async def fake_get(self, url, *, params=None, headers=None):
+        key = params["api_key"]
+        calls.append(key)
+        if key == "key-1":
+            return httpx.Response(429, json={"error": "Search limit reached"})
+        return httpx.Response(200, json={"best_flights": []})
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    settings = Settings(
+        api_keys=("key-1", "key-2"),
+        app_token="",
+        timeout_seconds=30.0,
+        key_state_path=str(state_path),
+    )
+    provider = SerpApiProvider(settings)
+    asyncio.run(provider.search({"departure_id": "YUL", "arrival_id": "CMN"}))
+
+    saved = json.loads(state_path.read_text(encoding="utf-8"))
+    assert saved["index"] == 1
+    raw_state = state_path.read_text(encoding="utf-8")
+    assert "key-1" not in raw_state
+    assert "key-2" not in raw_state
+
+    restarted = SerpApiProvider(settings)
+    assert restarted.active_key_number == 2
     assert calls == ["key-1", "key-2"]
 
 
