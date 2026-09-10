@@ -27,11 +27,12 @@ public final class AlertCheckJobService extends JobService {
     }
 
     private boolean checkAlerts() {
-        ProviderConfig config = new SecureConfigStore(this).load();
+        SecureConfigStore configStore = new SecureConfigStore(this);
+        ProviderConfig config = configStore.load();
         List<PriceAlert> alerts = new AlertRepository(this).load();
         if (!config.isConfigured() || alerts.isEmpty()) return false;
 
-        FlightService service = FlightServiceFactory.create(config);
+        FlightService service = FlightServiceFactory.create(config, configStore);
         PriceHistoryRepository history = new PriceHistoryRepository(this);
         boolean retry = false;
         for (PriceAlert alert : alerts) {
