@@ -14,7 +14,7 @@ import android.view.View;
 public final class FlightRadarView extends View {
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path routePath = new Path();
-    private String originLabel = "YOW";
+    private String originLabel = "YUL";
     private String destinationLabel = "CMN";
 
     public FlightRadarView(Context context) {
@@ -28,7 +28,7 @@ public final class FlightRadarView extends View {
     }
 
     public void setRouteLabels(String origin, String destination) {
-        originLabel = code(origin, "YOW");
+        originLabel = code(origin, "YUL");
         destinationLabel = code(destination, "CMN");
         invalidate();
     }
