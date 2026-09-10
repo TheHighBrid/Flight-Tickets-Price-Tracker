@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import hmac
+import json
 import math
 import os
 import time
 from dataclasses import dataclass
 from datetime import date
+from pathlib import Path
 from typing import Any, Mapping
 
 import httpx
@@ -67,6 +69,7 @@ class Settings:
     api_keys: tuple[str, ...]
     app_token: str
     timeout_seconds: float
+    key_state_path: str = ""
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "Settings":
@@ -82,6 +85,7 @@ class Settings:
             api_keys=_clean_api_keys(source),
             app_token=source.get("FLIGHT_API_ACCESS_TOKEN", "").strip(),
             timeout_seconds=timeout_seconds,
+            key_state_path=source.get("SERPAPI_KEY_STATE_PATH", "").strip(),
         )
 
     @property
@@ -100,7 +104,8 @@ class SerpApiProvider:
     def __init__(self, settings: Settings, *, initial_key_index: int = 0) -> None:
         self.settings = settings
         self._active_month = _month_key()
-        self._active_key_index = min(max(int(initial_key_index), 0), len(settings.api_keys))
+        self._state_path = Path(settings.key_state_path) if settings.key_state_path else None
+        self._active_key_index = self._load_rotation_state(initial_key_index)
         self._rotation_lock = asyncio.Lock()
 
     @property
@@ -117,16 +122,49 @@ class SerpApiProvider:
         index = self.active_key_index
         return index + 1 if index < self.api_key_count else None
 
+    def _load_rotation_state(self, fallback_index: int) -> int:
+        fallback = min(max(int(fallback_index), 0), len(self.settings.api_keys))
+        if self._state_path is None or not self._state_path.exists():
+            return fallback
+        try:
+            state = json.loads(self._state_path.read_text(encoding="utf-8"))
+            if state.get("month") != self._active_month:
+                return 0
+            index = int(state.get("index", fallback))
+            if 0 <= index <= len(self.settings.api_keys):
+                return index
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            pass
+        return fallback
+
+    def _persist_rotation_state(self) -> None:
+        if self._state_path is None:
+            return
+        try:
+            self._state_path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self._state_path.with_suffix(self._state_path.suffix + ".tmp")
+            tmp.write_text(
+                json.dumps({"month": self._active_month, "index": self._active_key_index}) + "\n",
+                encoding="utf-8",
+            )
+            tmp.replace(self._state_path)
+        except OSError:
+            # Persistence is an optimization for schedulers. A read-only filesystem must
+            # not prevent the provider from rotating correctly in memory.
+            pass
+
     def _reset_if_new_month(self) -> None:
         month = _month_key()
         if month != self._active_month:
             self._active_month = month
             self._active_key_index = 0
+            self._persist_rotation_state()
 
     async def _advance_key(self, failed_index: int) -> int:
         async with self._rotation_lock:
             self._reset_if_new_month()
             self._active_key_index = max(self._active_key_index, failed_index + 1)
+            self._persist_rotation_state()
             return self._active_key_index
 
     def _all_keys_exhausted(self) -> HTTPException:
