@@ -46,10 +46,15 @@ jobs:
         shell: bash
         env:
           SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
+          SERPAPI_API_KEY_2: ${{ secrets.SERPAPI_API_KEY_2 }}
+          SERPAPI_API_KEY_3: ${{ secrets.SERPAPI_API_KEY_3 }}
+          SERPAPI_API_KEY_4: ${{ secrets.SERPAPI_API_KEY_4 }}
+          SERPAPI_API_KEY_5: ${{ secrets.SERPAPI_API_KEY_5 }}
           FLIGHT_WATCHLIST_JSON: ${{ secrets.FLIGHT_WATCHLIST_JSON }}
         run: |
           set -euo pipefail
-          if [ -n "${SERPAPI_API_KEY:-}" ] && [ -n "${FLIGHT_WATCHLIST_JSON:-}" ]; then
+          key_pool="${SERPAPI_API_KEY:-}${SERPAPI_API_KEY_2:-}${SERPAPI_API_KEY_3:-}${SERPAPI_API_KEY_4:-}${SERPAPI_API_KEY_5:-}"
+          if [ -n "$key_pool" ] && [ -n "${FLIGHT_WATCHLIST_JSON:-}" ]; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
             echo "Fare monitor configuration detected."
           else
@@ -63,6 +68,10 @@ jobs:
         shell: bash
         env:
           SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
+          SERPAPI_API_KEY_2: ${{ secrets.SERPAPI_API_KEY_2 }}
+          SERPAPI_API_KEY_3: ${{ secrets.SERPAPI_API_KEY_3 }}
+          SERPAPI_API_KEY_4: ${{ secrets.SERPAPI_API_KEY_4 }}
+          SERPAPI_API_KEY_5: ${{ secrets.SERPAPI_API_KEY_5 }}
           FLIGHT_WATCHLIST_JSON: ${{ secrets.FLIGHT_WATCHLIST_JSON }}
           FLIGHT_MONITOR_MONTHLY_CALL_CAP: ${{ vars.FLIGHT_MONITOR_MONTHLY_CALL_CAP || '200' }}
           FLIGHT_MONITOR_MAX_CALLS_PER_RUN: ${{ vars.FLIGHT_MONITOR_MAX_CALLS_PER_RUN || '4' }}
