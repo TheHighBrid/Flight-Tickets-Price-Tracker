@@ -41,8 +41,25 @@ jobs:
           restore-keys: |
             fare-monitor-state-
 
+      - name: Check private monitor configuration
+        id: config
+        shell: bash
+        env:
+          SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
+          FLIGHT_WATCHLIST_JSON: ${{ secrets.FLIGHT_WATCHLIST_JSON }}
+        run: |
+          set -euo pipefail
+          if [ -n "${SERPAPI_API_KEY:-}" ] && [ -n "${FLIGHT_WATCHLIST_JSON:-}" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "Fare monitor configuration detected."
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Fare monitor skipped: private configuration is incomplete."
+          fi
+
       - name: Scan private watchlist
         id: scan
+        if: steps.config.outputs.enabled == 'true'
         shell: bash
         env:
           SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
@@ -70,7 +87,7 @@ jobs:
           exit "$status"
 
       - name: Create privacy-safe GitHub notification
-        if: always() && steps.scan.outputs.alert_count != '0'
+        if: always() && steps.config.outputs.enabled == 'true' && steps.scan.outputs.alert_count != '0'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -104,10 +121,15 @@ jobs:
       - name: Publish privacy-safe run summary
         if: always()
         shell: bash
+        env:
+          MONITOR_ENABLED: ${{ steps.config.outputs.enabled }}
         run: |
           {
             echo "## Free Fare Monitor"
-            if [ -f .fare-monitor/result.json ]; then
+            if [ "${MONITOR_ENABLED:-false}" != "true" ]; then
+              echo "- Status: skipped"
+              echo "- Reason: private monitor configuration is incomplete."
+            elif [ -f .fare-monitor/result.json ]; then
               python - <<'PY'
           import json
           with open('.fare-monitor/result.json', encoding='utf-8') as handle:
