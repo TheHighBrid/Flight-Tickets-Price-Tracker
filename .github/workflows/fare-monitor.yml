@@ -74,11 +74,17 @@ jobs:
           SERPAPI_API_KEY_5: ${{ secrets.SERPAPI_API_KEY_5 }}
           SERPAPI_KEY_STATE_PATH: .fare-monitor/serpapi-key-state.json
           FLIGHT_WATCHLIST_JSON: ${{ secrets.FLIGHT_WATCHLIST_JSON }}
-          FLIGHT_MONITOR_MONTHLY_CALL_CAP: ${{ vars.FLIGHT_MONITOR_MONTHLY_CALL_CAP || '200' }}
+          FLIGHT_MONITOR_MONTHLY_CALL_CAP: ${{ vars.FLIGHT_MONITOR_MONTHLY_CALL_CAP }}
           FLIGHT_MONITOR_MAX_CALLS_PER_RUN: ${{ vars.FLIGHT_MONITOR_MAX_CALLS_PER_RUN || '4' }}
         run: |
           set -euo pipefail
           mkdir -p .fare-monitor
+
+          if [ -z "${FLIGHT_MONITOR_MONTHLY_CALL_CAP:-}" ]; then
+            key_count="$(PYTHONPATH=server python -c 'from app.main import Settings; print(max(len(Settings.from_env().api_keys), 1))')"
+            export FLIGHT_MONITOR_MONTHLY_CALL_CAP="$((23 * key_count))"
+          fi
+
           set +e
           PYTHONPATH=server python -m app.fare_monitor \
             --state .fare-monitor/state.json \
