@@ -36,7 +36,7 @@ jobs:
       - name: Restore and retain rolling monitor state
         uses: actions/cache@v6
         with:
-          path: .fare-monitor/state.json
+          path: .fare-monitor
           key: fare-monitor-state-${{ github.run_id }}
           restore-keys: |
             fare-monitor-state-
@@ -72,6 +72,7 @@ jobs:
           SERPAPI_API_KEY_3: ${{ secrets.SERPAPI_API_KEY_3 }}
           SERPAPI_API_KEY_4: ${{ secrets.SERPAPI_API_KEY_4 }}
           SERPAPI_API_KEY_5: ${{ secrets.SERPAPI_API_KEY_5 }}
+          SERPAPI_KEY_STATE_PATH: .fare-monitor/serpapi-key-state.json
           FLIGHT_WATCHLIST_JSON: ${{ secrets.FLIGHT_WATCHLIST_JSON }}
           FLIGHT_MONITOR_MONTHLY_CALL_CAP: ${{ vars.FLIGHT_MONITOR_MONTHLY_CALL_CAP || '200' }}
           FLIGHT_MONITOR_MAX_CALLS_PER_RUN: ${{ vars.FLIGHT_MONITOR_MAX_CALLS_PER_RUN || '4' }}
