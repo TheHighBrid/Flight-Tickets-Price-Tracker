@@ -8,6 +8,7 @@ import android.util.Base64;
 
 import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
+import java.time.YearMonth;
 
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
@@ -18,6 +19,8 @@ public final class SecureConfigStore {
     private static final String PREFS = "provider_config";
     private static final String KEY_BLOB = "encrypted_provider_config_v1";
     private static final String KEY_ALIAS = "flight_tracker_provider_config";
+    private static final String KEY_POOL_MONTH = "serpapi_key_pool_month";
+    private static final String KEY_POOL_INDEX = "serpapi_key_pool_index";
     private static final String TRANSFORMATION = "AES/GCM/NoPadding";
 
     private final SharedPreferences preferences;
@@ -26,7 +29,7 @@ public final class SecureConfigStore {
         preferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
 
-    public void save(ProviderConfig config) {
+    public synchronized void save(ProviderConfig config) {
         try {
             Cipher cipher = Cipher.getInstance(TRANSFORMATION);
             cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey());
@@ -34,6 +37,7 @@ public final class SecureConfigStore {
             String blob = Base64.encodeToString(cipher.getIV(), Base64.NO_WRAP)
                     + ":" + Base64.encodeToString(ciphertext, Base64.NO_WRAP);
             preferences.edit().putString(KEY_BLOB, blob).apply();
+            resetSerpApiKeyRotation();
         } catch (Exception exception) {
             throw new IllegalStateException("Unable to protect provider configuration.", exception);
         }
@@ -63,8 +67,60 @@ public final class SecureConfigStore {
         }
     }
 
-    public void clear() {
-        preferences.edit().remove(KEY_BLOB).apply();
+    /**
+     * Returns the active SerpApi key slot. A value equal to apiKeyCount() means every key
+     * has been exhausted/rejected for the current month. The first access in a new calendar
+     * month automatically resets the pool to slot 0.
+     */
+    public synchronized int currentSerpApiKeyIndex(ProviderConfig config) {
+        int keyCount = config == null ? 0 : config.apiKeyCount();
+        if (keyCount == 0) return 0;
+
+        String month = YearMonth.now().toString();
+        String savedMonth = preferences.getString(KEY_POOL_MONTH, "");
+        int savedIndex = preferences.getInt(KEY_POOL_INDEX, 0);
+        if (!month.equals(savedMonth) || savedIndex < 0 || savedIndex > keyCount) {
+            preferences.edit()
+                    .putString(KEY_POOL_MONTH, month)
+                    .putInt(KEY_POOL_INDEX, 0)
+                    .apply();
+            return 0;
+        }
+        return savedIndex;
+    }
+
+    /**
+     * Marks the supplied slot unusable for the current month and advances to the next key.
+     * Returns the next slot, or -1 if the pool is fully exhausted.
+     */
+    public synchronized int rotateSerpApiKey(ProviderConfig config, int exhaustedIndex) {
+        int keyCount = config == null ? 0 : config.apiKeyCount();
+        if (keyCount == 0) return -1;
+
+        String month = YearMonth.now().toString();
+        int current = currentSerpApiKeyIndex(config);
+        int next = Math.max(current, exhaustedIndex + 1);
+        if (next > keyCount) next = keyCount;
+        preferences.edit()
+                .putString(KEY_POOL_MONTH, month)
+                .putInt(KEY_POOL_INDEX, next)
+                .apply();
+        return next < keyCount ? next : -1;
+    }
+
+    public synchronized void resetSerpApiKeyRotation() {
+        preferences.edit()
+                .putString(KEY_POOL_MONTH, YearMonth.now().toString())
+                .putInt(KEY_POOL_INDEX, 0)
+                .apply();
+    }
+
+    public synchronized void clear() {
+        preferences.edit()
+                .remove(KEY_BLOB)
+                .remove(KEY_POOL_MONTH)
+                .remove(KEY_POOL_INDEX)
+                .apply();
     }
 
     private SecretKey getOrCreateKey() throws Exception {
